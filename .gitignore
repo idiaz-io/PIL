@@ -20,4 +20,12 @@ build/
 /raw-capture/
 *.raw.json
 
+# Environment files. PIL has none today and needs none — it is a library with no runtime
+# configuration — but PIL_CAPTURE_SALT is a real secret in the capture workflow and the
+# obvious place for someone to park it locally is a .env beside the harness. AXO ignores
+# these already; PIL did not, which IDI-197 caught.
+.env
+.env.*
+!.env.example
+
 .DS_Store

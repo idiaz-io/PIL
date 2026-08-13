@@ -34,6 +34,63 @@ only the README" is Definition-of-Done item 8, and it is tested in CI.
 
 ---
 
+## Installing PIL into a product
+
+The above sets up PIL for working *on* PIL. Installing it *into* a product — so AXO can
+actually call it — is a different thing, and this section exists because nobody should
+have to ask a person how to do it.
+
+Clone the two repos side by side, then install both packages into the product's
+environment in editable mode:
+
+```sh
+# from the product's directory, with its own virtualenv active
+uv pip install -e ../PIL/packages/contracts   # pil-contracts
+uv pip install -e ../PIL/packages/adapters    # pil-adapters (depends on contracts)
+```
+
+Adjust the relative path to wherever PIL is checked out. AXO's layout puts its venv at
+`msp-platform/.venv`, so from `msp-platform/`:
+
+```sh
+uv pip install --python .venv/bin/python -e ../../PIL/packages/contracts
+uv pip install --python .venv/bin/python -e ../../PIL/packages/adapters
+```
+
+**Editable matters.** A non-editable install copies the code into the product's
+`site-packages`, and from then on the product runs a snapshot: you edit PIL, nothing
+changes, and you spend an afternoon confused. Editable means the product imports the
+files you are editing.
+
+### Confirm it is real
+
+Two checks. The first proves *where* the code is, the second proves it is *live*:
+
+```sh
+# 1. Points at your PIL checkout, not inside the product's site-packages
+python -c "import pil_contracts, pathlib; print(pathlib.Path(pil_contracts.__file__).resolve())"
+
+# 2. The product picks up an edit with no reinstall
+python -c "import pil_contracts; print(pil_contracts.CURRENT_SCHEMA_VERSION)"
+```
+
+If check 1 prints a path containing `site-packages`, the install is a copy and not
+editable. Reinstall with `-e`.
+
+### `pil-contracts` is not yet a declared product dependency
+
+Worth knowing before you deploy anything. AXO's `requirements.txt` does not list either
+package, so the editable install above is manual and local. On a host without it:
+
+* `pil_capture` cannot scrub, so capture stays off rather than writing unscrubbed data
+* `pil_shim`'s `shadow` and `pil` modes fall back to `legacy` with a logged error
+
+Both fail closed, so nothing unsafe happens — but nothing works either. How PIL should be
+distributed (private index, `git+ssh` with a deploy key, or a vendored wheel) is an open
+decision, tracked on IDI-196.
+
+---
+
 ## What Phase A is doing
 
 Moving AXO's alert **translation** into PIL, proving the new implementation produces
