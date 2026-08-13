@@ -102,8 +102,10 @@ def test_contracts_imports_nothing_from_this_repo_or_outside_the_stdlib():
         "datetime",
         "enum",
         "hashlib",
+        "hmac",
         "json",
         "math",
+        "re",
         "typing",
     }
     offenders: list[str] = []

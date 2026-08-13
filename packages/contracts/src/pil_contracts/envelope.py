@@ -28,12 +28,13 @@ Two fields deserve explanation:
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
 from pil_contracts.canonical import canonical_hash, canonical_json
+from pil_contracts.redaction import Redaction, redact
 from pil_contracts.versioning import CURRENT_SCHEMA_VERSION, SchemaVersion
 
 __all__ = ["AlertBody", "Envelope", "MessageKind", "TenantHint", "format_timestamp"]
@@ -191,6 +192,27 @@ class Envelope:
 
     def content_hash(self) -> str:
         return canonical_hash(self.to_dict())
+
+    # -- redaction -----------------------------------------------------------------
+
+    def redacted(self, *, salt: bytes | None = None) -> tuple[Envelope, Redaction]:
+        """A copy with credentials stripped from ``raw_payload``, plus what was found.
+
+        Opt-in, and deliberately not applied during construction. AXO stores the vendor
+        payload untouched, and I-10 requires PIL's translator output to be byte-identical
+        to AXO's for the duration of the migration — so redacting inside ``translate()``
+        would both break parity and smuggle a behaviour improvement into a migration,
+        which is the thing I-10 exists to forbid.
+
+        The emit boundary is where this belongs: a sink calls it, the translator does not.
+        Once the migration is finished and parity is no longer the constraint, making it
+        unconditional is a one-line change and its own ticket.
+
+        Only ``raw_payload`` is touched. Body fields are the translated result, and
+        rewriting those would change the message rather than protect it.
+        """
+        result = redact(dict(self.raw_payload), salt=salt)
+        return replace(self, raw_payload=result.payload), result
 
     # -- parsing -------------------------------------------------------------------
 
