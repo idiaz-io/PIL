@@ -135,7 +135,7 @@ config-file implementation." `AdapterConfig` is:
 ```python
 @dataclass(frozen=True, slots=True)
 class AdapterConfig:
-    tenant_id: str                      # packages/adapters/src/pil_adapters/base.py:31-52
+    tenant_id: str  # packages/adapters/src/pil_adapters/base.py:31-52
 ```
 
 One field. No endpoint, no credential handle, no provider interface, no config-file loader.

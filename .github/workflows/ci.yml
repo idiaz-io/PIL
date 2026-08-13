@@ -65,20 +65,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check for AXO access
-        id: access
+      # This step used to set a flag that every later step tested, so a missing secret
+      # skipped the whole job and it reported success with a warning nobody reads. The
+      # job that proves the migration must not be able to pass by not running: DoD item
+      # 7 is read off this check mark. Missing configuration is now a failure.
+      - name: Require AXO access
         run: |
-          if [ -n "${{ secrets.AXO_READ_TOKEN }}" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Parity not run::AXO_READ_TOKEN is not configured, so the parity harness could not check out AXO. Definition of Done item 3 is NOT satisfied until this secret exists."
+          if [ -z "${{ secrets.AXO_READ_TOKEN }}" ]; then
+            echo "::error title=Parity cannot run::AXO_READ_TOKEN is not configured, so the harness cannot check out AXO. This job fails rather than skipping, because a green parity check with nothing compared is worse than no check. Definition of Done item 7 is not satisfiable until this secret exists."
+            exit 1
+          fi
+          if [ -z "${{ vars.AXO_PARITY_SHA }}" ]; then
+            echo "::error title=Parity revision unpinned::AXO_PARITY_SHA is not set. Parity must run against a known AXO revision, or the specification moves underneath the comparison."
+            exit 1
           fi
 
       # PIL never vendors a product (I-3). The harness points at a checkout placed
       # beside it; it does not contain one, and nothing under packages/ imports it.
       - name: Check out AXO at a pinned revision
-        if: steps.access.outputs.available == 'true'
         uses: actions/checkout@v4
         with:
           repository: idiaz-io/Axo
@@ -87,14 +91,18 @@ jobs:
           path: .axo
 
       - name: Install uv
-        if: steps.access.outputs.available == 'true'
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
       - run: uv sync --python 3.12 --frozen
-        if: steps.access.outputs.available == 'true'
+
+      # AXO's normalisers run under AXO's own interpreter — they need pydantic, httpx,
+      # fastapi and sqlalchemy, which PIL's venv deliberately lacks (I-3).
+      - name: Install AXO's dependencies
+        run: |
+          python -m venv .axo/msp-platform/.venv
+          .axo/msp-platform/.venv/bin/pip install -q -r .axo/msp-platform/requirements.txt
 
       - name: Parity
-        if: steps.access.outputs.available == 'true'
         run: make parity AXO_PATH=.axo

@@ -4,6 +4,12 @@
 
 Byte-identical or it fails (§5 Step 3), with one documented exception.
 
+**What counts as a failure.** Differing output, obviously. But also: an empty corpus, and
+any source whose corpus is thinner than ``--min-per-source``. Both used to pass. A harness
+that returns success having compared nothing reports Definition of Done item 7 as satisfied
+while holding no evidence, and that is worse than having no harness — it gets read as proof.
+``--demo`` exists for exercising the machinery and never reports a parity result.
+
 **What this proves, precisely.** Every field except ``tenant_id`` must match byte for
 byte. ``tenant_id`` is excluded because PIL takes the tenant from the adapter instance's
 configuration while AXO reads it from the vendor payload — the single intentional
@@ -49,7 +55,7 @@ time.tzset()
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "adapters" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "contracts" / "src"))
 
-from pil_adapters import AdapterConfig, FrozenClock, get_translator  # noqa: E402
+from pil_adapters import TRANSLATOR_TYPES, AdapterConfig, FrozenClock, get_translator  # noqa: E402
 from pil_contracts import canonical_text  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -64,6 +70,11 @@ HARNESS_TENANT = "parity-harness-tenant"
 
 #: Excluded from the byte comparison. See ADR-0004.
 EXCLUDED_FIELDS = ("tenant_id",)
+
+#: Fixtures a source needs before its result means anything. The lower bound in
+#: IDI-195 §D6 step 1, "capture 10-20 real payloads per source". Named rather than
+#: inlined so that relaxing it is a visible edit.
+DEFAULT_MIN_PER_SOURCE = 10
 
 #: Payloads used by --demo to prove the harness itself works before real fixtures exist.
 DEMO_PAYLOADS: dict[str, list[dict[str, Any]]] = {
@@ -262,6 +273,13 @@ def main() -> int:
         "This is NOT a parity proof — it exercises the machinery, not real traffic.",
     )
     parser.add_argument("--python", default="", help="AXO's interpreter (default: its .venv)")
+    parser.add_argument(
+        "--min-per-source",
+        type=int,
+        default=DEFAULT_MIN_PER_SOURCE,
+        help=f"fail if any source has fewer fixtures than this (default "
+        f"{DEFAULT_MIN_PER_SOURCE}, the lower bound in IDI-195 §D6). Ignored with --demo.",
+    )
     args = parser.parse_args()
 
     axo_path = Path(args.axo_path).resolve()
@@ -292,15 +310,21 @@ def main() -> int:
     print()
 
     if not cases:
-        print("No fixtures found.")
+        print("FAILED — no fixtures, so nothing was compared.")
+        print()
+        print("An empty corpus is not a pass. This command exits non-zero here on purpose:")
+        print("Definition of Done item 7 asks for parity proven for every source, and a")
+        print("harness that returns success having compared nothing reports that item as")
+        print("satisfied while holding no evidence at all. A check that cannot fail is worse")
+        print("than no check, because it gets read as proof.")
         print()
         print("The corpus is captured from AXO in production by")
-        print("backend/services/pil_capture.py, gated on PIL_CAPTURE_ENABLED. Until it has")
-        print("run, there is nothing to compare — see")
-        print("docs/adr/0007-fixture-capture-and-scrubbing.md.")
+        print("backend/services/pil_capture.py, gated on PIL_CAPTURE_ENABLED and requiring")
+        print("PIL_CAPTURE_SALT — see docs/adr/0007-fixture-capture-and-scrubbing.md.")
         print()
-        print("Run with --demo to check the harness itself works.")
-        return 0
+        print("To exercise the machinery without a corpus, use --demo. That is deliberately")
+        print("a separate flag: it proves the harness runs, it does not prove parity.")
+        return 1
 
     axo_results = run_axo(axo_path, cases, python)
 
@@ -336,6 +360,17 @@ def main() -> int:
     if divergent:
         print(f"    payloads where AXO's tenant and PIL's hint disagree: {len(divergent)}")
 
+    # Coverage. Definition of Done item 7 is "passes for every source AXO supports", and
+    # a source with no fixtures is silently not checked — the per-source lines above only
+    # report on directories that exist. Without this, deleting a fixture directory makes
+    # the run greener, which is the wrong incentive.
+    thin: list[str] = []
+    if not args.demo:
+        for source in sorted(TRANSLATOR_TYPES):
+            count = len(by_source.get(source, ()))
+            if count < args.min_per_source:
+                thin.append(f"      {source:<14} {count} fixture(s), need {args.min_per_source}")
+
     print()
     if failures:
         print(f"FAILED — {len(failures)} of {len(outcomes)} payloads differ.")
@@ -343,6 +378,25 @@ def main() -> int:
         print("docs/known-differences.md with a ticket. It is not something to fix in the")
         print("translator while migrating (I-10).")
         return 1
+
+    if thin:
+        print(f"FAILED — {len(outcomes)} payloads matched, but coverage is short.")
+        print()
+        print("  Sources below the minimum:")
+        print("\n".join(thin))
+        print()
+        print("Every source AXO supports needs a corpus of its own (DoD 7). Matching on the")
+        print("sources that happen to have fixtures is not parity for the sources that do")
+        print("not. Lower the bar with --min-per-source only when you mean to.")
+        return 1
+
+    if args.demo:
+        print(f"Harness OK — {len(outcomes)} synthetic payloads agree.")
+        print()
+        print("This is NOT a parity result and must not be recorded as one. It proves the")
+        print("machinery runs against payloads written by hand. Real parity needs the")
+        print("captured corpus; run without --demo.")
+        return 0
 
     print(f"PASSED — {len(outcomes)} payloads, byte-identical except {excluded}.")
     return 0
