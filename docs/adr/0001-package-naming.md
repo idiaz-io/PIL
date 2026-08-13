@@ -6,7 +6,9 @@
 
 Flat, prefixed top-level packages: `pil_contracts` and `pil_adapters`, published as the
 distributions `pil-contracts` and `pil-adapters`. Later components follow the same shape:
-`pil_graph`, `pil_gate`, `pil_ledger`, `pil_bus`.
+`pil_graph`, `pil_gate`, `pil_ledger`.
+
+`pil_bus` was reserved here originally and is not, since IDI-195 D4 cut the bus.
 
 ## Context
 

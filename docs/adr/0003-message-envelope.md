@@ -20,6 +20,13 @@ live in `body` — `AlertBody` carries `alert_id`, `device_id`, `device_name`, `
 `translate()` **returns** an envelope to its caller. There is no sink, no table, no bus
 (§8 decision 4).
 
+> **Amended by [ADR-0009](0009-sink-interface.md).** "No sink" was too strong and
+> contradicted §8 decision 4 of the scope, which asked for a handoff behind an interface.
+> `translate()` still returns rather than routing — that part stands, and it is what keeps
+> I-1 and I-4 true by construction. What changed is that a caller now has a named place to
+> put the result (`pil_adapters.Sink`) instead of every product inventing one. A translator
+> still does not know a sink exists.
+
 ## Context
 
 §4 asks for the envelope, its version field, the tenant, the source and adapter version,

@@ -10,7 +10,7 @@ Six components are planned. Two exist:
 |---|---|---|
 | [`pil_contracts`](packages/contracts) | `pil-contracts` | Phase A — the message envelope |
 | [`pil_adapters`](packages/adapters) | `pil-adapters` | Phase A — inbound translation only |
-| `graph`, `gate`, `ledger`, `bus` | — | not started |
+| `graph`, `gate`, `ledger` | — | not started |
 
 They are separate distributions on purpose. QUILL needs contracts and does not need
 adapters, and `pil-contracts` has **zero dependencies** — not on this repo, and not on

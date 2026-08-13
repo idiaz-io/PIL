@@ -18,6 +18,7 @@ from pil_adapters.connection import (
     ToolConnection,
 )
 from pil_adapters.registry import TRANSLATOR_TYPES, build_registry, get_translator
+from pil_adapters.sink import CollectingSink, NullSink, RedactingSink, Sink
 from pil_adapters.translators.addigy import AddigyTranslator
 from pil_adapters.translators.connectwise import ConnectWiseTranslator
 from pil_adapters.translators.fleet import FleetTranslator
@@ -31,6 +32,7 @@ __all__ = [
     "AdapterConfig",
     "AddigyTranslator",
     "Clock",
+    "CollectingSink",
     "ConnectWiseTranslator",
     "ConnectionNotConfiguredError",
     "ConnectionProvider",
@@ -39,9 +41,12 @@ __all__ = [
     "FleetTranslator",
     "FrozenClock",
     "LegacyTranslator",
+    "NullSink",
+    "RedactingSink",
     "SL1HealingTranslator",
     "ScienceLogicTranslator",
     "SecretStore",
+    "Sink",
     "StaticConnectionProvider",
     "SystemClock",
     "ToolConnection",

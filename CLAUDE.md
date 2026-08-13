@@ -6,7 +6,7 @@ Read this before doing anything in this repo.
 
 ## What PIL is
 
-PIL is the shared floor under every MERP product. Six components, no more:
+PIL is the shared floor under every MERP product. Five components, no more:
 
 | Component | One line |
 |---|---|
@@ -15,7 +15,12 @@ PIL is the shared floor under every MERP product. Six components, no more:
 | **graph** | The only path to the knowledge graph. Tenant-scoped queries. |
 | **gate** | Answers: may this action run? Yes / ask a named human / no. |
 | **ledger** | Signed, hash-chained evidence. Verifiable offline. |
-| **bus** | How work moves between products, and how it rolls back. |
+
+There is deliberately no bus and no capability catalogue. Both were cut (IDI-195 D4): they
+had zero consumers, AXO already has its own queue, and with two products a naming
+convention does what a catalogue would. A translated message goes to a simple sink behind
+an interface — `pil_adapters.Sink`, an in-process handoff, not a broker. Revisit the bus
+when something actually needs a shared one, and expect an ADR rather than a commit.
 
 Products that consume PIL: AXO, QUILL, Vigil, Otto, Guardrails, Pavo, Remi.
 

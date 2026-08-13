@@ -47,9 +47,12 @@ migrate safely, we learn here, where a mistake is cheap.
 
 **Out of scope**
 
-Graph access. The gate. The ledger. The bus beyond a trivial sink interface. The
-capability catalogue. Any change to AXO's reasoning, execution or verification.
-Any new HTTP surface anywhere.
+Graph access. The gate. The ledger. Any change to AXO's reasoning, execution or
+verification. Any new HTTP surface anywhere.
+
+The bus and the capability catalogue are not merely out of scope — they were **cut**
+(IDI-195 D4), on the grounds that both had zero consumers. The trivial sink interface that
+replaces the bus for Phase A is `pil_adapters.Sink` and is in scope; it shipped.
 
 ---
 
@@ -213,7 +216,7 @@ These are not for Claude Code to choose. Flag them and wait.
 | 1 | Version compatibility rule — how a v1 consumer handles a v2 message | contracts, therefore everything | Additive-only within a major version; unknown fields ignored, never rejected |
 | 2 | Which languages need generated contract code | contracts | Python only for now. Add TypeScript when Guardrails becomes real work, not before. |
 | 3 | Package naming and import paths | repo init | Decide once; renaming later touches every product |
-| 4 | Where a translated message goes in Phase A | adapters | A simple table or in-process handoff behind an interface. Not the bus — that is a later component. |
+| 4 | Where a translated message goes in Phase A | adapters | A simple in-process handoff behind an interface — `pil_adapters.Sink`. Not the bus, which was cut (IDI-195 D4). Shipped; see ADR-0009. |
 | 5 | Shadow-mode observation window before cutover | step 5 | Long enough to cover a full business cycle for every source |
 | 6 | Whether contracts and adapters are separately versioned and released | repo init | Yes. QUILL will need contracts without adapters. |
 
