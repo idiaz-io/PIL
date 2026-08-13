@@ -54,6 +54,7 @@ __all__ = [
     "Classification",
     "Redaction",
     "classify_key",
+    "pseudonymise",
     "redact",
     "redact_text",
 ]
@@ -217,7 +218,7 @@ def redact_text(value: str) -> str:
     return out
 
 
-def _pseudonymise(value: str, kind: str, salt: bytes) -> str:
+def pseudonymise(value: str, kind: str, salt: bytes) -> str:
     """Map an identifying value to a stable fake one.
 
     HMAC rather than a plain hash: without the salt the mapping cannot be reversed by
@@ -325,8 +326,8 @@ def _pseudonymise_preserving_shape(value: str, kind: str, salt: bytes) -> str:
     """
     if "/" in value:
         head, _, tail = value.rpartition("/")
-        return f"{head}/{_pseudonymise(tail, kind, salt)}" if tail else value
-    return _pseudonymise(value, kind, salt)
+        return f"{head}/{pseudonymise(tail, kind, salt)}" if tail else value
+    return pseudonymise(value, kind, salt)
 
 
 def _mark_if_changed(

@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Any, ClassVar
 
 from pil_adapters.clock import Clock, SystemClock
-from pil_contracts import AlertBody, Envelope, TenantHint
+from pil_contracts import AlertBody, Envelope, Tenant, TenantHint, resolve_tenant
 
 __all__ = ["AdapterConfig", "Translation", "Translator"]
 
@@ -36,20 +36,34 @@ class AdapterConfig:
     For scheduled work there is no token to take it from, so it comes from here and
     nowhere else — never from a vendor payload.
 
-    No credentials appear on this object. Phase A translates and nothing more, so there
-    is nothing to authenticate to. When the connect surface arrives it brings a secret
-    *handle* rather than a value (I-8), and its own ADR.
+    The rule itself lives in :mod:`pil_contracts.tenancy`, not here. This class supplies
+    the *value*; shapes owns the decision about what a valid tenant is, so that QUILL —
+    which takes contracts without adapters — gets the identical rule rather than writing
+    its own (IDI-195 D1).
+
+    No credentials appear on this object; they are on
+    :class:`~pil_adapters.connection.ToolConnection`, which an adapter obtains through an
+    interface rather than reading a product's configuration (D2, D3). Phase A still
+    translates and nothing more, so nothing resolves a credential yet.
     """
 
     tenant_id: str
 
     def __post_init__(self) -> None:
-        if not self.tenant_id or not self.tenant_id.strip():
-            raise ValueError(
-                "AdapterConfig.tenant_id is required and may not be blank. I-5: an "
-                "adapter instance may never emit a message for any tenant other than "
-                "its configured one, so there is no sensible default."
-            )
+        # Validated by resolving through shapes, so a blank or non-string tenant fails
+        # here in exactly the way it would fail anywhere else in MERP. The resolved
+        # Tenant is available as `tenant`; this call is for its rejection behaviour.
+        resolve_tenant(adapter_config_tenant=self.tenant_id)
+
+    @property
+    def tenant(self) -> Tenant:
+        """The configured tenant, resolved through shapes.
+
+        Carries :attr:`~pil_contracts.tenancy.TenantSource.ADAPTER_CONFIG`, which is the
+        honest answer for scheduled work: there was no token, and the tenant came from
+        configuration rather than from anything the vendor sent.
+        """
+        return resolve_tenant(adapter_config_tenant=self.tenant_id)
 
 
 @dataclass(frozen=True, slots=True)

@@ -255,3 +255,39 @@ def test_legacy_uses_the_clock_when_no_timestamp_key_is_present():
 def test_legacy_keeps_present_but_empty_values():
     envelope = LegacyTranslator(CONFIG, CLOCK).translate({"alert_id": "", "id": "fallback"})
     assert envelope.body.alert_id == ""
+
+
+# ----------------------------------------------------------------------------------
+# Tenancy — the adapter path uses shapes rather than repeating the rule (IDI-195 D1)
+# ----------------------------------------------------------------------------------
+#
+# These live here rather than in the contracts tests deliberately. contracts is a separate
+# distribution because QUILL takes it *without* adapters, so its test suite must not import
+# adapters either — otherwise "you can take contracts alone" stops being checkable.
+
+
+def test_adapter_config_resolves_its_tenant_through_shapes():
+    """AdapterConfig supplies the value; pil_contracts.tenancy owns the rule."""
+    from pil_adapters import AdapterConfig
+    from pil_contracts import Tenant, TenantSource
+
+    config = AdapterConfig(tenant_id="tenant-acme")
+    assert config.tenant == Tenant("tenant-acme", TenantSource.ADAPTER_CONFIG)
+
+
+def test_the_configured_tenant_reports_its_source_honestly():
+    """Scheduled work has no token, and the envelope's provenance should say so."""
+    from pil_adapters import AdapterConfig
+    from pil_contracts import TenantSource
+
+    assert AdapterConfig(tenant_id="t").tenant.source is TenantSource.ADAPTER_CONFIG
+
+
+@pytest.mark.parametrize("bad", ["", "   ", " tenant-acme ", "\t"])
+def test_adapter_config_rejects_exactly_what_shapes_rejects(bad):
+    """One rule, one set of rejections. A second spelling of the rule is a second rule."""
+    from pil_adapters import AdapterConfig
+    from pil_contracts import TenancyError
+
+    with pytest.raises(TenancyError):
+        AdapterConfig(tenant_id=bad)

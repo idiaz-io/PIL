@@ -24,8 +24,15 @@ from pil_contracts.redaction import (
     Classification,
     Redaction,
     classify_key,
+    pseudonymise,
     redact,
     redact_text,
+)
+from pil_contracts.tenancy import (
+    TenancyError,
+    Tenant,
+    TenantSource,
+    resolve_tenant,
 )
 from pil_contracts.versioning import (
     CURRENT_SCHEMA_VERSION,
@@ -44,12 +51,17 @@ __all__ = [
     "MessageKind",
     "Redaction",
     "SchemaVersion",
+    "TenancyError",
+    "Tenant",
     "TenantHint",
+    "TenantSource",
     "canonical_hash",
     "canonical_json",
     "canonical_text",
     "classify_key",
     "format_timestamp",
+    "pseudonymise",
     "redact",
     "redact_text",
+    "resolve_tenant",
 ]
