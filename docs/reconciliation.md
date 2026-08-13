@@ -1,6 +1,9 @@
 # Reconciliation — the PIL adapter extraction against six later decisions
 
-IDI-195, Step 0. Audit only. Nothing in either repo was changed to produce this document.
+IDI-195. **Step 0 (the audit) plus the work it authorised.** Read the Outcome section first;
+the audit below it is preserved exactly as written before any change, because a
+reconciliation document whose "before" column gets edited to match the "after" stops being
+evidence of anything.
 
 Repos audited:
 
@@ -35,7 +38,44 @@ This is a precondition for the rest of the work, not one of the six decisions.
 
 ---
 
-## The table
+## Outcome, after the work
+
+The audit table below is preserved as written, because a reconciliation document whose
+"before" column gets edited to match the "after" stops being evidence of anything. This
+section records what changed.
+
+| # | Decision | Now | Commit |
+|---|---|---|---|
+| **D1** | Shapes owns four things | ✅ **Complete.** Redaction and tenancy resolution now live in `pil_contracts`; format and the version rule already did. AXO's `pil_capture` delegates, so there is one implementation rather than three. | `b1c5c6d`, `a61f82c`, axo `863a686` |
+| **D2** | Config through an interface | ✅ **Complete.** `ConnectionProvider` + `FileConnectionProvider`. ADR-0008 records it and amends ADR-0005. | `ec7b958` |
+| **D3** | Credentials per product | ✅ **Complete.** Keyed `(tool, tenant, product)`, no tool-level fallback, `Access` on the handle. | `ec7b958` |
+| **D4** | Bus and catalogue cut; sink built | ✅ **Complete.** Four doc references cut; `pil_adapters.Sink` built. ADR-0009 amends ADR-0003, which had contradicted the scope document. | `84d129e` |
+| **D5** | Rollback path | ✅ **Complete.** Nothing had been deleted. The switch now also covers the queue-driven path, and `pil` mode no longer returns the wrong `StandardAlert` shape to it. | axo `138e92c` |
+| **D6** | Parity evidence | 🟡 **Machinery complete, corpus blocked.** Three false passes closed; the committed specification and `--record-golden` built. `fixtures/` is still empty and needs a production capture run. | `3d7e7aa`, `96c035a`, `e75da3d` |
+
+**Two corrections to the audit**, both found while implementing:
+
+1. **D5's gap was one call site, not two.** The audit said "wire the two pollers". The Fleet
+   poller does not normalise at all — it inserts a raw payload into `healing_queue`
+   (`fleet_poller.py:140`), and `queue_worker.py:70` hands it to `process_alert_v2`, whose
+   INTAKE stage called `adapter.normalize_alert` directly (`orchestrator_v2.py:92`). One
+   unwired site, and a more important one: it covers every poller-originated alert *and*
+   the whole v2 pipeline.
+
+2. **`pil` mode would have broken that call site**, exactly as `pil_shim`'s own docstring
+   warned ("Any new call site must handle both shapes the same way before the switch is
+   pointed at it"). The v2 pipeline reads `.message` and `.signature`, which only the
+   reasoning dataclass has; the shim always built the Pydantic `StandardAlert`, which names
+   the text `description`. That fails in `pil` mode only — the mode nobody exercises until
+   cutover. Fixed by making the shape a parameter.
+
+**A third finding, recorded not fixed:** AXO's `pil_shim.py` and its tests were *untracked*
+working-tree files, as was all of PIL. The rollback path existed on one machine, not in the
+repository. Both are now committed.
+
+---
+
+## The audit, as written before any changes
 
 | # | Decision | Current state | What has to change |
 |---|---|---|---|
@@ -374,14 +414,17 @@ bug found by an epoch fixture. Both sides share one frozen instant (`:59`). With
 
 ---
 
-## The four tests that close this out — none have been run
+## The four tests that close this out
+
+Status after the work. Three of the four need a running deployment and are honestly not run
+rather than approximated.
 
 | Test | State | Note |
 |---|---|---|
-| 1 · **Parity** passes for every source, in CI | 🔴 Not run meaningfully | Cannot pass on evidence today: zero fixtures, and both the command and the CI job return success anyway. Blocked on D6. |
-| 2 · **Shadow** shows zero differences on real traffic | 🔴 Never run | Machinery is ready: `shadow_stats()` (`pil_shim.py:61-67`) reports identical/different/error per source. Caveat — counts are in-process and reset on restart (`:54`), so a "full business cycle" claim needs the log lines aggregated, not this counter. And shadow covers webhook paths only (D5 gap 1). |
-| 3 · **Break it** — rename a symbol in PIL, confirm AXO breaks | 🔴 Not run, no record | **Would give a false pass if run as written.** In `legacy` mode AXO never imports PIL — `_translate_with_pil` imports `pil_adapters` *inside the function body* (`pil_shim.py:157-162`), reached only under `shadow`/`pil` (`:229`, `:248`). Since `legacy` is the default, renaming a PIL symbol breaks nothing. This test only means anything with the switch in `shadow` or `pil`, and that condition has to be recorded with the result. The ticket calls this the one test that cannot give a false pass; as the code stands, it can. |
-| 4 · **Rollback** — flip to `legacy`, no deploy | 🔴 Not run, no record | Mechanism looks sound: per-call `platform_settings` read, `legacy` on any doubt (`pil_shim.py:75-105`). Needs demonstrating, not just reading. |
+| 1 · **Parity** passes for every source, in CI | 🟡 **Can now fail; cannot yet pass** | The three false passes are closed (`3d7e7aa`, `96c035a`, `e75da3d`) and `make parity` exits 1 today. It cannot pass until the corpus exists, which is correct: passing would mean holding evidence. The machinery is proven against AXO's real normalisers — 9/9 on `--demo`, and 15 harness tests including one that tampers with a committed specification and asserts the run fails. |
+| 2 · **Shadow** shows zero differences on real traffic | 🔴 **Not run** — needs production | Now possible on the paths that matter: before `138e92c` the switch saw only `routes/webhook.py`, so shadow was blind to all scheduled traffic. Two caveats to record with any result: `shadow_stats()` counts are in-process and reset on restart (`pil_shim.py:54`), so a "full business cycle" claim needs the log lines aggregated, not the counter; and PIL's tenant is excluded from the comparison by design (ADR-0004). |
+| 3 · **Break it** — rename a symbol in PIL, confirm AXO breaks | 🔴 **Not run** — needs a test environment | **The precondition must be recorded with the result.** In `legacy` mode AXO never imports PIL: `_translate_with_pil` imports `pil_adapters` inside the function body (`pil_shim.py`), reached only under `shadow`/`pil`. Since `legacy` is the default, renaming a PIL symbol breaks nothing — so run this with the switch in `shadow` or `pil`, or it gives a false pass. The ticket calls this the one test that cannot lie; as the code stands it can, and that is worth knowing before someone runs it. |
+| 4 · **Rollback** — flip to `legacy`, no deploy | 🔴 **Not run** — needs a deployment | Mechanism reads correctly and is now unit-tested: per-call `platform_settings` read, `legacy` on any doubt, `legacy` on an unrecognised value, and `legacy` if PIL raises (`tests/test_pil_shim.py`, 19 passed). Still needs demonstrating on a real deployment rather than inferring from tests. |
 
 ---
 
@@ -393,37 +436,85 @@ bug found by an epoch fixture. Both sides share one frozen instant (`:59`). With
 | **Idempotency** | **Absent as a facility; two ingredients exist incidentally.** `Envelope.content_hash()` (`pil_contracts/envelope.py:192`) gives a stable identity for a message, and AXO's capture already dedupes by content and structure hash (`pil_capture.py:207`, `:229`). Neither answers "have I already processed this?" — there is no processed-set and no store. |
 | **Test doubles** | **Partial, and the drift has already started.** PIL ships `FrozenClock` (`pil_adapters/clock.py:41`) and nothing else; there is no fake gate, ledger or graph, because those components do not exist yet. Meanwhile AXO has written its own fake adapter (`apps/exoagent/internal/adapters/fake/fake.go`) — precisely the "each product writes its own and they drift" outcome, one product in. |
 
+Two of the three moved slightly as a side effect of building D2 and D4, which is worth
+recording so nobody counts them as done:
+
+- **Test doubles** — PIL now also ships `StaticConnectionProvider`, `CollectingSink` and
+  `NullSink`. These are doubles for the interfaces that exist, so each product does not write
+  its own. The fake gate, ledger and graph are still absent because those components are not
+  built. Not built in this ticket, per instruction.
+- **Idempotency** — no change. `Envelope.content_hash()` still gives a stable identity and
+  capture still dedupes by content and structure hash, but there is no processed-set and no
+  store, so the question "have I already processed this?" still has no answer.
+- **Degradation reporting** — no change. Still absent, still nothing incidental.
+
 ---
 
-## What I would do, in order, on approval
+## What was done
 
-Sequenced so each step is checkable and nothing lands before the thing it depends on.
+Nine commits in PIL, two in AXO, one idea each.
 
-1. **Initial commit of PIL as it stands.** Baseline first, so every subsequent change is a
-   reviewable diff. One commit, no edits mixed in.
-2. **Kill the two false passes (D6.3).** `parity.py` exits non-zero on an empty corpus; the
-   CI parity job fails rather than skips when it cannot reach AXO. Smallest change, largest
-   honesty gain, and it makes every later step's evidence trustworthy.
-3. **Redaction in shapes (D1).** New `pil_contracts` module, covering `raw_payload`. AXO's
-   `pil_capture` redactor then calls it instead of owning it.
-4. **Tenancy resolution into shapes (D1).** So `contracts` alone gives QUILL the same rule.
-   Keep the existing structural enforcement — it is better than what D1 asks for; add the
-   named function and move `AdapterConfig`'s tenant handling behind it.
-5. **Connection-config interface + config-file implementation (D2), with per-product
-   credential handles built in from the start (D3).** One interface, two decisions closed.
-   *Pending your ruling on the ADR-0005 conflict.*
-6. **Sink interface (D4)**, and supersede ADR-0003. **Delete the bus doc residue (D4).**
-7. **Wire the pollers through the shim (D5 gap 1)**, and settle `sl1_poller` — either a PIL
-   translator for it or a decision that the second SL1 path is out of scope, recorded.
-8. **Enable capture, gather the corpus, commit AXO's output as golden files (D6.1, D6.2).**
-   Everything above is prerequisite to this producing meaningful evidence.
-9. **Run all four closing tests and record results on IDI-195**, including the `shadow`/`pil`
-   precondition for test 3.
+| Commit | Decision |
+|---|---|
+| `21afa97` | Baseline — the extraction as it stood, no edits |
+| `bbeff5a` | The audit above |
+| `3d7e7aa` | D6 — parity cannot pass without evidence |
+| `b1c5c6d` | D1 — redaction into shapes |
+| axo `863a686` | D1 — `pil_capture` delegates to it |
+| `a61f82c` | D1 — tenancy resolution into shapes |
+| `ec7b958` | D2, D3 — connection interface, per-product credentials |
+| `84d129e` | D4 — sink built, bus cut |
+| axo `138e92c` | D5 — switch covers the scheduled paths |
+| `e75da3d` | D5, D6 — out-of-scope sources skipped loudly |
+| `96c035a` | D6 — the committed specification |
 
-Two things I am **not** doing without a decision from you: the ADR-0005 vs D2 conflict
-(step 5), and how strictly to read DoD 5 on the bus doc lines (step 6).
+Commands, all runnable:
 
-Nothing in AXO's behaviour gets fixed anywhere in this sequence. The defects found are
-recorded in `docs/known-differences.md`, which already exists and already has six entries —
-though all six say `_to file_` in the ticket column and need real ticket numbers before
-Phase A closes.
+```bash
+cd PIL
+uv run pytest                                             # 243 passed, 1 skipped
+uv run ruff check . && uv run ruff format --check .       # clean
+uv run mypy                                               # clean, 20 files
+make parity AXO_PATH=../axo                               # exits 1 — empty corpus
+uv run python scripts/parity.py --axo-path ../axo --demo  # 9/9 against AXO's own
+uv run pytest tests/test_parity_harness.py                # 15 passed
+
+cd ../axo/msp-platform
+.venv/bin/python -m pytest tests/test_pil_shim.py tests/test_pil_capture.py   # 39 passed
+```
+
+### Two decisions taken, both confirmed before implementing
+
+1. **D2 vs ADR-0005.** ADR-0005 deferred the connect surface; D2 said the interface was
+   required now. Built it, and ADR-0008 *amends* rather than supersedes: an interface with
+   no caller is not a connect surface, and nothing here connects to anything.
+2. **DoD 5 strictness on D4.** Cut all four bus references, leaving one line in each place
+   recording that D4 cut it and why — the history is worth keeping precisely so nobody
+   rebuilds it.
+
+### AXO defects found and recorded, not fixed
+
+Per the ticket's rule. Beyond the six already in `known-differences.md`:
+
+- `tests/test_circuit_breaker.py` and `tests/test_remediate.py` do not collect on `main`.
+  Both import `MAX_ACTIONS_PER_HOUR` from `backend.services.circuit_breaker`, which defines
+  `DEFAULT_MAX_ACTIONS_PER_HOUR`. Pre-existing, unrelated to this ticket.
+- `tests/test_classify.py` (3) and `tests/test_end_to_end.py` (1) fail whenever a real
+  `ANTHROPIC_API_KEY` is present: they assert on hardcoded classifications and get live model
+  output instead. Verified pre-existing — identical failures at `75ddc32` with the same
+  `.env`, in a clean worktree.
+- The six entries in `known-differences.md` still say `_to file_` in the ticket column. They
+  need real numbers before Phase A closes.
+
+### What remains
+
+One thing, and it needs production access rather than code:
+
+**The corpus.** `fixtures/` is empty. It needs `PIL_CAPTURE_ENABLED`, `PIL_CAPTURE_SALT` and
+real traffic through AXO. Everything downstream of it is built and tested — `fixtures/README.md`
+has the exact steps. Until then `make parity` fails honestly rather than passing vacuously,
+which is the change that makes the remaining gap visible instead of invisible.
+
+Closing tests 2, 3 and 4 need a deployed environment and are recorded as not run, with the
+preconditions each requires. Test 3's precondition matters most: it only means something with
+the switch in `shadow` or `pil`, because in `legacy` AXO never imports PIL at all.
