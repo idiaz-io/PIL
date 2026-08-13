@@ -506,15 +506,43 @@ Per the ticket's rule. Beyond the six already in `known-differences.md`:
 - The six entries in `known-differences.md` still say `_to file_` in the ticket column. They
   need real numbers before Phase A closes.
 
-### What remains
+### What remains — tracked in IDI-196
 
-One thing, and it needs production access rather than code:
+IDI-195 is closed. Everything below needs AXO running somewhere real and taking actual
+traffic, so it was split into **IDI-196** rather than left open here.
 
 **The corpus.** `fixtures/` is empty. It needs `PIL_CAPTURE_ENABLED`, `PIL_CAPTURE_SALT` and
-real traffic through AXO. Everything downstream of it is built and tested — `fixtures/README.md`
-has the exact steps. Until then `make parity` fails honestly rather than passing vacuously,
-which is the change that makes the remaining gap visible instead of invisible.
+real traffic through AXO. Everything downstream of it is built and tested —
+`fixtures/README.md` has the exact steps. Until then `make parity` fails honestly rather than
+passing vacuously, which is the change that makes the remaining gap visible instead of
+invisible.
 
 Closing tests 2, 3 and 4 need a deployed environment and are recorded as not run, with the
 preconditions each requires. Test 3's precondition matters most: it only means something with
 the switch in `shadow` or `pil`, because in `legacy` AXO never imports PIL at all.
+
+Two blockers this work surfaced, both on IDI-196, neither previously a known item:
+
+1. **`pil-contracts` is not a declared AXO dependency.** It is an editable install pointing
+   at a sibling checkout, absent from `requirements.txt`. On a deployed host capture stays
+   off and `shadow`/`pil` fall back to `legacy` — both fail closed, so it is safe, but it
+   makes every remaining task impossible. Needs a distribution decision: private index,
+   `git+ssh` with a deploy key, or a vendored wheel.
+2. **Five uncommitted AXO files**, including the two that create the `PIL_ADAPTER_MODE` row
+   (`settings_queries.py`, `main.py`) and the three wiring sites (`webhook.py`,
+   `fleet_poller.py`, `sl_poller.py`). None are from this ticket. Without the first two
+   `get_mode()` finds no row and returns `legacy`, so the rollback path cannot be exercised.
+
+### Definition of done, where each item landed
+
+| Item | Where |
+|---|---|
+| 1 · `docs/reconciliation.md`, every decision compliant or committed | ✅ here |
+| 2 · Tenancy and redaction in shapes, tenant enforced by test | ✅ here |
+| 3 · Config through an interface, test fails on a product import | ✅ here |
+| 4 · Different credentials per product for the same tool | ✅ here |
+| 5 · Nothing for the bus or capability catalogue remains | ✅ here |
+| 6 · AXO's adapters present and reachable via `legacy`, no deploy | ✅ here |
+| 7 · Parity passes in CI for every source | → IDI-196 (needs the corpus) |
+| 8 · All four closing tests run and recorded | → IDI-196 (needs a deployment) |
+| 9 · Report-only items have a status each | ✅ here |
