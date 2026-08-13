@@ -129,3 +129,42 @@ def test_every_known_source_is_subject_to_the_coverage_floor():
         "addigy",
         "legacy",
     }
+
+
+@NEEDS_AXO
+def test_an_out_of_scope_source_is_skipped_and_reported(tmp_path, capsys):
+    """A source with no PIL translator must not be scored as a match.
+
+    Collected and compared, `sl1_poller` fails to find a translator on *both* sides, which
+    the comparison would score as "both raised (matching)" — a source with no
+    implementation counted as evidence of parity. It is skipped instead, and the skip is
+    printed, because a harness that silently drops part of its corpus reads as having
+    covered everything.
+    """
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "sl1_poller").mkdir(parents=True)
+    (fixtures / "sl1_poller" / "a.json").write_text('{"id": "1"}', encoding="utf-8")
+
+    # Nothing comparable remains, so this exits 1 on the empty-corpus rule — the point
+    # being that the sl1_poller fixture did not quietly become a passing case.
+    assert run(["--axo-path", str(AXO), "--fixtures", str(fixtures)]) == 1
+
+    out = capsys.readouterr().out
+    assert "SKIPPED" in out
+    assert "sl1_poller" in out
+    assert "ADR-0005" in out, "the skip should say why, not just that"
+
+
+def test_out_of_scope_sources_are_documented_with_a_reason():
+    """A bare list would let someone silence a source without justifying it."""
+    assert parity.OUT_OF_SCOPE_SOURCES
+    for source, reason in parity.OUT_OF_SCOPE_SOURCES.items():
+        assert len(reason) > 80, f"{source} needs a real reason, not a label"
+
+
+def test_no_out_of_scope_source_has_a_translator():
+    """If a translator appears for one, it stops being out of scope and the entry is stale."""
+    from pil_adapters import TRANSLATOR_TYPES
+
+    overlap = set(parity.OUT_OF_SCOPE_SOURCES) & set(TRANSLATOR_TYPES)
+    assert not overlap, f"{overlap} have translators and should be compared, not skipped"

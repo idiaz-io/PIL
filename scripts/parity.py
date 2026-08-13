@@ -76,6 +76,20 @@ EXCLUDED_FIELDS = ("tenant_id",)
 #: inlined so that relaxing it is a visible edit.
 DEFAULT_MIN_PER_SOURCE = 10
 
+#: Captured sources that deliberately have no PIL translator, with the reason.
+#:
+#: These are reported and skipped rather than compared. Without this they would be
+#: collected, fail to find a translator on both sides, and be scored as "both raised
+#: (matching)" — a source with no implementation counted as evidence of parity.
+OUT_OF_SCOPE_SOURCES: dict[str, str] = {
+    "sl1_poller": (
+        "sl_poller.py:238 _normalise_api_alert returns a database row shape, not a "
+        "StandardAlert — ADR-0005 defers it, and mapping ext_ticket_ref and counter onto "
+        "the envelope is an envelope question needing its own ADR. Captured as evidence "
+        "for that future decision, not as a parity target."
+    ),
+}
+
 #: Payloads used by --demo to prove the harness itself works before real fixtures exist.
 DEMO_PAYLOADS: dict[str, list[dict[str, Any]]] = {
     "sciencelogic": [
@@ -139,12 +153,21 @@ class Outcome:
     pil_hint: str = ""
 
 
-def collect_fixtures(fixtures_root: Path) -> list[Case]:
+def collect_fixtures(fixtures_root: Path) -> tuple[list[Case], dict[str, int]]:
+    """Every comparable fixture, plus a count of what was deliberately skipped.
+
+    The skipped count is returned rather than swallowed so the run can print it. A harness
+    that quietly drops part of its corpus reads as having covered everything.
+    """
     cases: list[Case] = []
+    skipped: dict[str, int] = {}
     if not fixtures_root.is_dir():
-        return cases
+        return cases, skipped
     for source_dir in sorted(fixtures_root.iterdir()):
         if not source_dir.is_dir() or source_dir.name.startswith("_"):
+            continue
+        if source_dir.name in OUT_OF_SCOPE_SOURCES:
+            skipped[source_dir.name] = len(list(source_dir.rglob("*.json")))
             continue
         for path in sorted(source_dir.rglob("*.json")):
             try:
@@ -155,7 +178,7 @@ def collect_fixtures(fixtures_root: Path) -> list[Case]:
             cases.append(
                 Case(source_dir.name, payload, str(path.relative_to(fixtures_root.parent)))
             )
-    return cases
+    return cases, skipped
 
 
 def demo_cases() -> list[Case]:
@@ -296,7 +319,11 @@ def main() -> int:
             "(I-3). Pass --python to point at one."
         )
 
-    cases = demo_cases() if args.demo else collect_fixtures(Path(args.fixtures))
+    skipped: dict[str, int] = {}
+    if args.demo:
+        cases = demo_cases()
+    else:
+        cases, skipped = collect_fixtures(Path(args.fixtures))
 
     print("PIL parity harness")
     print(f"  AXO checkout   {axo_path}")
@@ -307,6 +334,10 @@ def main() -> int:
     print(f"  cases          {len(cases)}")
     if args.demo:
         print("  MODE           --demo: synthetic payloads. Proves the harness, not parity.")
+    # Printed, never silent. A harness that drops part of its corpus without saying so
+    # reads as having covered everything.
+    for source, count in sorted(skipped.items()):
+        print(f"  SKIPPED        {source}: {count} fixture(s) — {OUT_OF_SCOPE_SOURCES[source]}")
     print()
 
     if not cases:
