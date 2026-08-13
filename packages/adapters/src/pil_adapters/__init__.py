@@ -7,6 +7,16 @@ anything or retries anything; a translator turns one payload into one
 
 from pil_adapters.base import AdapterConfig, Translation, Translator
 from pil_adapters.clock import Clock, FrozenClock, SystemClock
+from pil_adapters.connection import (
+    Access,
+    ConnectionNotConfiguredError,
+    ConnectionProvider,
+    CredentialHandle,
+    FileConnectionProvider,
+    SecretStore,
+    StaticConnectionProvider,
+    ToolConnection,
+)
 from pil_adapters.registry import TRANSLATOR_TYPES, build_registry, get_translator
 from pil_adapters.translators.addigy import AddigyTranslator
 from pil_adapters.translators.connectwise import ConnectWiseTranslator
@@ -17,16 +27,24 @@ from pil_adapters.translators.sl1_healing import SL1HealingTranslator
 
 __all__ = [
     "TRANSLATOR_TYPES",
+    "Access",
     "AdapterConfig",
     "AddigyTranslator",
     "Clock",
     "ConnectWiseTranslator",
+    "ConnectionNotConfiguredError",
+    "ConnectionProvider",
+    "CredentialHandle",
+    "FileConnectionProvider",
     "FleetTranslator",
     "FrozenClock",
     "LegacyTranslator",
     "SL1HealingTranslator",
     "ScienceLogicTranslator",
+    "SecretStore",
+    "StaticConnectionProvider",
     "SystemClock",
+    "ToolConnection",
     "Translation",
     "Translator",
     "build_registry",
