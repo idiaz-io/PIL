@@ -104,5 +104,10 @@ jobs:
           python -m venv .axo/msp-platform/.venv
           .axo/msp-platform/.venv/bin/pip install -q -r .axo/msp-platform/requirements.txt
 
+      # Byte-identical or it fails, and it cannot pass having compared nothing: an empty
+      # corpus exits non-zero, and every source must meet --min-per-source. This job also
+      # checks AXO against fixtures/_expected first — the committed specification — so an
+      # unannounced change to AXO's normalisers fails here rather than silently redefining
+      # what "correct" means.
       - name: Parity
         run: make parity AXO_PATH=.axo

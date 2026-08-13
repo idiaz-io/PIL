@@ -168,3 +168,189 @@ def test_no_out_of_scope_source_has_a_translator():
 
     overlap = set(parity.OUT_OF_SCOPE_SOURCES) & set(TRANSLATOR_TYPES)
     assert not overlap, f"{overlap} have translators and should be compared, not skipped"
+
+
+# ----------------------------------------------------------------------------------
+# The committed specification  (IDI-195 §D6 step 2)
+# ----------------------------------------------------------------------------------
+#
+# "Run each through AXO's current code and commit the output. That saved output is the
+# specification — not the docs, not anyone's memory."
+#
+# Without this, the harness compares PIL against whatever AXO happens to do today: an
+# accidental change to AXO's normalisers silently redefines "correct" and parity still
+# passes. These tests are the ones that make the specification a specification.
+
+
+def _corpus(tmp_path, count=3):
+    """A small ScienceLogic corpus the real AXO normaliser handles."""
+    fixtures = tmp_path / "fixtures"
+    (fixtures / "sciencelogic").mkdir(parents=True)
+    for index in range(count):
+        (fixtures / "sciencelogic" / f"{index}.json").write_text(
+            json.dumps({"id": str(index), "severity": "4", "message": "disk full"}),
+            encoding="utf-8",
+        )
+    return fixtures
+
+
+@NEEDS_AXO
+def test_recording_golden_then_comparing_passes(tmp_path):
+    """The happy path: record AXO's output, then a run agrees with it."""
+    fixtures = _corpus(tmp_path)
+    golden = tmp_path / "_expected"
+    argv = [
+        "--axo-path",
+        str(AXO),
+        "--fixtures",
+        str(fixtures),
+        "--golden",
+        str(golden),
+        "--min-per-source",
+        "0",
+    ]
+
+    assert run([*argv, "--record-golden"]) == 0
+    assert list(golden.rglob("*.json")), "recording must actually write files"
+    assert run(argv) == 0
+
+
+@NEEDS_AXO
+def test_axo_drifting_from_the_specification_fails(tmp_path, capsys):
+    """The test this whole mechanism exists for.
+
+    A golden file that no longer matches AXO's live output means AXO's behaviour moved.
+    That has to fail loudly, and it has to be distinguishable from a PIL porting bug —
+    PIL's result is not meaningful once the specification has shifted underneath it.
+    """
+    fixtures = _corpus(tmp_path)
+    golden = tmp_path / "_expected"
+    argv = [
+        "--axo-path",
+        str(AXO),
+        "--fixtures",
+        str(fixtures),
+        "--golden",
+        str(golden),
+        "--min-per-source",
+        "0",
+    ]
+    assert run([*argv, "--record-golden"]) == 0
+
+    # Stand in for AXO's behaviour changing: edit the committed specification.
+    victim = next(iter(golden.rglob("*.json")))
+    recorded = json.loads(victim.read_text(encoding="utf-8"))
+    recorded["projection"]["severity"] = "P9-something-nobody-emits"
+    victim.write_text(json.dumps(recorded), encoding="utf-8")
+
+    assert run(argv) == 1
+
+    out = capsys.readouterr().out
+    assert "committed specification" in out
+    assert "not a PIL" in out, "must not read as a porting bug"
+    assert "--record-golden" in out, "should say how to accept a deliberate change"
+
+
+@NEEDS_AXO
+def test_no_golden_skips_the_specification_check(tmp_path):
+    """For local iteration. CI does not use it, and the header says when it is off."""
+    fixtures = _corpus(tmp_path)
+    golden = tmp_path / "_expected"
+    argv = [
+        "--axo-path",
+        str(AXO),
+        "--fixtures",
+        str(fixtures),
+        "--golden",
+        str(golden),
+        "--min-per-source",
+        "0",
+    ]
+    assert run([*argv, "--record-golden"]) == 0
+
+    victim = next(iter(golden.rglob("*.json")))
+    victim.write_text('{"ok": true, "projection": {"severity": "wrong"}}', encoding="utf-8")
+
+    assert run([*argv, "--no-golden"]) == 0, "--no-golden must skip the drift check"
+    assert run(argv) == 1, "and without it, the drift is caught"
+
+
+@NEEDS_AXO
+def test_a_missing_golden_file_does_not_fail_the_run(tmp_path):
+    """Before the corpus is recorded there is nothing to compare against.
+
+    Deliberately not an error: the coverage floor already fails a run with no corpus, and
+    making a missing golden file fatal too would mean a newly captured fixture breaks CI
+    before anyone has had the chance to record it.
+    """
+    fixtures = _corpus(tmp_path)
+    argv = [
+        "--axo-path",
+        str(AXO),
+        "--fixtures",
+        str(fixtures),
+        "--golden",
+        str(tmp_path / "absent"),
+        "--min-per-source",
+        "0",
+    ]
+    assert run(argv) == 0
+
+
+@NEEDS_AXO
+def test_recording_is_byte_stable(tmp_path):
+    """A re-record with no behaviour change must produce an empty diff.
+
+    Canonical JSON, so reviewing "did AXO change" is reading a diff rather than trusting
+    that key order happened to be preserved.
+    """
+    fixtures = _corpus(tmp_path)
+    golden = tmp_path / "_expected"
+    argv = [
+        "--axo-path",
+        str(AXO),
+        "--fixtures",
+        str(fixtures),
+        "--golden",
+        str(golden),
+        "--min-per-source",
+        "0",
+        "--record-golden",
+    ]
+    assert run(argv) == 0
+    first = {p.name: p.read_bytes() for p in sorted(golden.rglob("*.json"))}
+
+    assert run(argv) == 0
+    second = {p.name: p.read_bytes() for p in sorted(golden.rglob("*.json"))}
+
+    assert first == second
+
+
+@NEEDS_AXO
+def test_the_specification_excludes_harness_annotations(tmp_path):
+    """Underscore-prefixed keys are the harness's tenant report, not AXO's output.
+
+    Recording them would make the specification depend on the harness's internals, so a
+    change to the tenant report would read as a change in AXO's behaviour.
+    """
+    fixtures = _corpus(tmp_path, count=1)
+    golden = tmp_path / "_expected"
+    assert (
+        run(
+            [
+                "--axo-path",
+                str(AXO),
+                "--fixtures",
+                str(fixtures),
+                "--golden",
+                str(golden),
+                "--min-per-source",
+                "0",
+                "--record-golden",
+            ]
+        )
+        == 0
+    )
+
+    recorded = json.loads(next(iter(golden.rglob("*.json"))).read_text(encoding="utf-8"))
+    assert not [k for k in recorded.get("projection", {}) if k.startswith("_")]

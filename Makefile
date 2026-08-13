@@ -1,12 +1,13 @@
-.PHONY: help install test lint typecheck check parity clean
+.PHONY: help install test lint typecheck check parity record-golden clean
 
 help:
-	@echo "install    Create the virtualenv and install both packages"
-	@echo "test       Run the test suite"
-	@echo "lint       ruff check + format check"
-	@echo "typecheck  mypy"
-	@echo "check      lint + typecheck + test  (what CI runs)"
-	@echo "parity     Compare PIL's translators against AXO's, over every fixture"
+	@echo "install       Create the virtualenv and install both packages"
+	@echo "test          Run the test suite"
+	@echo "lint          ruff check + format check"
+	@echo "typecheck     mypy"
+	@echo "check         lint + typecheck + test  (what CI runs)"
+	@echo "parity        Compare PIL's translators against AXO's, over every fixture"
+	@echo "record-golden Save AXO's current output as the specification (review the diff)"
 
 install:
 	uv sync --python 3.12
@@ -29,6 +30,11 @@ AXO_PATH ?= ../axo
 
 parity:
 	uv run python scripts/parity.py --axo-path $(AXO_PATH)
+
+# Defines the specification (§D6 step 2). Review the diff before committing: a change to
+# a file that already existed means AXO's behaviour moved, which is a finding.
+record-golden:
+	uv run python scripts/parity.py --axo-path $(AXO_PATH) --record-golden
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache

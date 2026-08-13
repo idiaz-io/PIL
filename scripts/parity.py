@@ -181,6 +181,89 @@ def collect_fixtures(fixtures_root: Path) -> tuple[list[Case], dict[str, int]]:
     return cases, skipped
 
 
+def golden_path(golden_root: Path, case: Case) -> Path:
+    """Where a case's expected output lives.
+
+    Keyed on the fixture's path rather than on its content, so that renaming a fixture
+    shows up as a deleted and an added golden file rather than as a silent orphan.
+    """
+    stem = Path(case.origin).with_suffix(".json").name
+    return golden_root / case.source / stem
+
+
+def record_golden(golden_root: Path, cases: list[Case], axo_results: list[dict[str, Any]]) -> int:
+    """Write AXO's current output as the specification. Returns the number written.
+
+    IDI-195 §D6 step 2: "Run each through AXO's **current** code and commit the output.
+    That saved output is the specification — not the docs, not anyone's memory."
+
+    Canonical JSON, so a re-record produces a byte-identical file when nothing changed and
+    the diff is empty. A diff here is the signal: it means AXO's behaviour moved.
+    """
+    written = 0
+    for case, result in zip(cases, axo_results, strict=True):
+        path = golden_path(golden_root, case)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Underscore-prefixed keys are the harness's own annotations (the tenant report),
+        # not AXO's output. Recording them would make the specification depend on the
+        # harness's internals.
+        body: dict[str, Any] = {"ok": result["ok"]}
+        if result["ok"]:
+            body["projection"] = {
+                k: v for k, v in result["projection"].items() if not k.startswith("_")
+            }
+        else:
+            # The error *type* is the specification, not the message — messages carry
+            # paths and line numbers that move between machines.
+            body["error_type"] = str(result.get("error", "")).split(":", 1)[0]
+        path.write_text(canonical_text(body) + "\n", encoding="utf-8")
+        written += 1
+    return written
+
+
+def compare_to_golden(golden_root: Path, case: Case, axo: dict[str, Any]) -> str | None:
+    """Check AXO's live output against the committed specification.
+
+    Returns a description of the difference, or None when they agree or no golden file
+    exists yet.
+
+    This is what makes the specification a *specification*. Without it the harness compares
+    PIL against whatever AXO happens to do today, so an accidental change to AXO's
+    normalisers silently redefines what "correct" means and parity still passes.
+    """
+    path = golden_path(golden_root, case)
+    if not path.is_file():
+        return None
+
+    expected = json.loads(path.read_text(encoding="utf-8"))
+    actual: dict[str, Any] = {"ok": axo["ok"]}
+    if axo["ok"]:
+        actual["projection"] = {k: v for k, v in axo["projection"].items() if not k.startswith("_")}
+    else:
+        actual["error_type"] = str(axo.get("error", "")).split(":", 1)[0]
+
+    if canonical_text(expected) == canonical_text(actual):
+        return None
+    return (
+        f"      AXO no longer matches the committed specification\n"
+        f"        expected: {canonical_text(expected)}\n"
+        f"        actual:   {canonical_text(actual)}\n"
+        f"        ({_display(path)})"
+    )
+
+
+def _display(path: Path) -> str:
+    """Repo-relative when possible, absolute otherwise.
+
+    ``--golden`` can point anywhere, including a temporary directory outside the repo, so
+    this cannot assume the path is under ``REPO_ROOT``.
+    """
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def demo_cases() -> list[Case]:
     return [
         Case(source, payload, f"--demo[{source}][{index}]")
@@ -297,6 +380,24 @@ def main() -> int:
     )
     parser.add_argument("--python", default="", help="AXO's interpreter (default: its .venv)")
     parser.add_argument(
+        "--golden",
+        default=str(REPO_ROOT / "fixtures" / "_expected"),
+        help="directory of committed AXO output — the specification (IDI-195 §D6 step 2)",
+    )
+    parser.add_argument(
+        "--record-golden",
+        action="store_true",
+        help="write AXO's current output to --golden and exit. This DEFINES the "
+        "specification, so the diff it produces is the thing to review: any change to a "
+        "committed file means AXO's behaviour moved.",
+    )
+    parser.add_argument(
+        "--no-golden",
+        action="store_true",
+        help="compare only against AXO running live, skipping the committed specification. "
+        "For local iteration; CI should not use it.",
+    )
+    parser.add_argument(
         "--min-per-source",
         type=int,
         default=DEFAULT_MIN_PER_SOURCE,
@@ -319,6 +420,8 @@ def main() -> int:
             "(I-3). Pass --python to point at one."
         )
 
+    golden_root = Path(args.golden)
+
     skipped: dict[str, int] = {}
     if args.demo:
         cases = demo_cases()
@@ -331,6 +434,10 @@ def main() -> int:
     print(f"  frozen clock   {FROZEN_INSTANT.isoformat()}   TZ=UTC")
     excluded = ", ".join(EXCLUDED_FIELDS)
     print(f"  comparing      every field EXCEPT {excluded} (ADR-0004)")
+    if args.demo or args.no_golden:
+        print("  golden         not checked")
+    else:
+        print(f"  golden         {golden_root}")
     print(f"  cases          {len(cases)}")
     if args.demo:
         print("  MODE           --demo: synthetic payloads. Proves the harness, not parity.")
@@ -358,6 +465,25 @@ def main() -> int:
         return 1
 
     axo_results = run_axo(axo_path, cases, python)
+
+    if args.record_golden:
+        written = record_golden(golden_root, cases, axo_results)
+        print(f"Recorded {written} expected output(s) to {golden_root}.")
+        print()
+        print("This DEFINES the specification (§D6 step 2). Review the diff before")
+        print("committing: any change to a file that already existed means AXO's behaviour")
+        print("moved, and that is a finding rather than a routine update.")
+        return 0
+
+    # AXO against its own committed output, before PIL is considered at all. A drift here
+    # invalidates the comparison that follows, because it means the thing PIL is being
+    # measured against is no longer the thing that was agreed.
+    drifted: list[tuple[Case, str]] = []
+    if not args.no_golden and not args.demo:
+        for case, axo_result in zip(cases, axo_results, strict=True):
+            difference = compare_to_golden(golden_root, case, axo_result)
+            if difference is not None:
+                drifted.append((case, difference))
 
     outcomes: list[Outcome] = []
     for case, axo_result in zip(cases, axo_results, strict=True):
@@ -403,6 +529,19 @@ def main() -> int:
                 thin.append(f"      {source:<14} {count} fixture(s), need {args.min_per_source}")
 
     print()
+    if drifted:
+        print(f"FAILED — AXO differs from its committed specification on {len(drifted)} case(s).")
+        print()
+        for case, difference in drifted:
+            print(f"         {case.origin}")
+            print(difference)
+        print()
+        print("The saved output IS the specification (§D6 step 2), so this is not a PIL")
+        print("problem and PIL's result below is not meaningful until it is resolved.")
+        print("Either AXO changed behaviour — a finding, and a ticket — or the change was")
+        print("deliberate, in which case re-record with --record-golden and review that diff.")
+        return 1
+
     if failures:
         print(f"FAILED — {len(failures)} of {len(outcomes)} payloads differ.")
         print("Each difference is either a porting bug or a known difference that belongs in")
