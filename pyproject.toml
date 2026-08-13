@@ -1,0 +1,92 @@
+[project]
+name = "pil-workspace"
+version = "0.0.0"
+description = "Development workspace for PIL. Not a published distribution."
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+pil-contracts = { workspace = true }
+pil-adapters = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pil-contracts",
+    "pil-adapters",
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.9.0",
+    "mypy>=1.14",
+]
+
+# ----------------------------------------------------------------------------------
+# Test runner
+# ----------------------------------------------------------------------------------
+# AXO's suite has no pytest config at all, which leaves asyncio_mode on "strict" and is
+# why every async test there carries an explicit @pytest.mark.asyncio. Configure it
+# here so PIL's tests do not have to.
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages/contracts/tests", "packages/adapters/tests", "tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "parity: compares PIL output against AXO's, requires an AXO checkout",
+]
+
+# ----------------------------------------------------------------------------------
+# Lint and format
+# ----------------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["packages/contracts/src", "packages/adapters/src", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PT", "SIM", "TID", "RUF"]
+# En and em dashes are used throughout the prose docstrings on purpose.
+ignore = ["RUF002", "RUF003"]
+
+# I-3 · PIL never depends on a product.
+#
+# The dependency arrow points one way, always. These are the MERP products; nothing in
+# PIL may import any of them. Enforced here as a lint rule rather than by intention,
+# per Definition of Done item 6. There is a matching test in tests/test_invariants.py
+# that catches dynamic imports this cannot see.
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"axo".msg = "I-3: PIL must never import from a product. If PIL needs this, it belonged in PIL."
+"quill".msg = "I-3: PIL must never import from a product."
+"vigil".msg = "I-3: PIL must never import from a product."
+"otto".msg = "I-3: PIL must never import from a product."
+"guardrails".msg = "I-3: PIL must never import from a product."
+"pavo".msg = "I-3: PIL must never import from a product."
+"remi".msg = "I-3: PIL must never import from a product."
+"backend".msg = "I-3: 'backend' is AXO's package. PIL must never import from a product."
+
+[tool.ruff.lint.per-file-ignores]
+# The parity harness is the one place that deliberately loads AXO's code, in a
+# subprocess with an explicit sys.path. It never imports a product at module scope.
+"scripts/parity.py" = ["TID251"]
+# _axo_driver.py is the one file that deliberately imports AXO. It is not library
+# code and never runs in PIL's interpreter — parity.py executes it as a subprocess
+# under AXO's own Python. The I-3 test in tests/test_invariants.py scans
+# packages/*/src, which is what the invariant actually governs.
+"scripts/_axo_driver.py" = ["TID251"]
+"packages/*/tests/*" = ["TID251"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pil_contracts", "pil_adapters"]
+
+# ----------------------------------------------------------------------------------
+# Type checking
+# ----------------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+files = ["packages/contracts/src", "packages/adapters/src"]

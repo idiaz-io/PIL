@@ -1,0 +1,100 @@
+# NOTE: this file must stay at the repository root under .github/workflows/.
+# AXO's workflows live at msp-platform/.github/workflows/ and healing-graph-core/.github/
+# workflows/ — both too deep for GitHub to ever trigger, which is why AXO has had
+# "CI" for months without a single run. Do not nest this one.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned so a translator that formats a timestamp in local time fails here rather
+  # than on someone's laptop. Several of AXO's normalisers do exactly that.
+  TZ: UTC
+
+jobs:
+  check:
+    name: lint · typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --python 3.12 --frozen
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Typecheck
+        run: uv run mypy
+
+      - name: Test
+        run: uv run pytest
+
+  fresh-clone:
+    name: README alone (DoD 8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Definition of Done item 8: "A new engineer can clone the repo and run the full
+      # test suite using only the README." These are the only two commands the README
+      # tells them to run, executed with nothing else set up.
+      - run: make install
+      - run: make test
+
+  parity:
+    name: parity against AXO (DoD 3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for AXO access
+        id: access
+        run: |
+          if [ -n "${{ secrets.AXO_READ_TOKEN }}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Parity not run::AXO_READ_TOKEN is not configured, so the parity harness could not check out AXO. Definition of Done item 3 is NOT satisfied until this secret exists."
+          fi
+
+      # PIL never vendors a product (I-3). The harness points at a checkout placed
+      # beside it; it does not contain one, and nothing under packages/ imports it.
+      - name: Check out AXO at a pinned revision
+        if: steps.access.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: idiaz-io/Axo
+          ref: ${{ vars.AXO_PARITY_SHA }}
+          token: ${{ secrets.AXO_READ_TOKEN }}
+          path: .axo
+
+      - name: Install uv
+        if: steps.access.outputs.available == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --python 3.12 --frozen
+        if: steps.access.outputs.available == 'true'
+
+      - name: Parity
+        if: steps.access.outputs.available == 'true'
+        run: make parity AXO_PATH=.axo
