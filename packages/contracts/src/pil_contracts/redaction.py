@@ -190,17 +190,61 @@ _CONFIDENTIAL_KEYS: Final = {
 }
 
 
-def classify_key(key: str) -> Classification:
-    """Classify a payload key by name.
+#: Keys that identify a customer under some parents and classify a thing under others.
+#:
+#: Only ``name`` qualifies today, and it earned its place by being wrong in production
+#: data. Every other entry in :data:`_CONFIDENTIAL_KEYS` is unambiguous — ``hostname`` is
+#: never anything but a hostname — so this stays a set of one until something else proves
+#: otherwise.
+_AMBIGUOUS_KEYS: Final = frozenset({"name"})
 
-    By name only, and that is the honest limit of it: a key called ``notes`` holding a
-    pasted password classifies as ``PUBLIC`` here. :func:`redact_text` is the second line
-    of defence for exactly that case, which is why every string value passes through it
+#: Parents under which an :data:`_AMBIGUOUS_KEYS` entry is *not* customer-identifying.
+#:
+#: The defect that produced this list (IDI-197): ConnectWise carries its ticket type as
+#: ``{"type": {"name": "Service"}}``. Pseudonymising it turned ``Service`` into
+#: ``name-f342a885ad39``, ``map_type_to_category`` found no substring match, and every
+#: scrubbed ConnectWise ticket classified as ``unknown``. Parity still *passed* — both
+#: implementations saw the same scrubbed input and both said ``unknown`` — so the failure
+#: was invisible in the one place built to catch failures, and ``--record-golden`` would
+#: have written ``unknown`` into the committed specification for payloads whose real
+#: category is ``service``.
+#:
+#: **The default is still to pseudonymise, and that bias is deliberate.** A missed
+#: pseudonym is a customer's hostname in a committed fixture; a needless one is a coverage
+#: gap. Those are not comparable, so an unrecognised parent — including no parent at all,
+#: for a bare top-level ``name`` — keeps the protection.
+#:
+#: Each entry below is a container whose ``name`` is drawn from a fixed vocabulary and
+#: cannot be a customer, a host or a person. Adding one requires that same argument:
+#:
+#: * ``type``     — ConnectWise ticket type; read for category
+#:                  (`connectwise.py:95`, `ticket_normaliser.py:38`)
+#: * ``status``   — ConnectWise ticket status (`ticket_normaliser.py:42`)
+#: * ``priority`` — ConnectWise priority (`connectwise/mapper.py:115`)
+#:
+#: Deliberately absent, having been considered: ``company``, ``device``, ``owner`` and
+#: ``member`` are the identity containers this protection exists for
+#: (`sciencelogic.py:127`, `connectwise.py:88`, `ticket_normaliser.py:161-164`). ``board``
+#: is excluded because an MSP can name a service board after a large client, and no
+#: translator reads it, so excluding it costs no coverage.
+_CLASSIFICATION_PARENTS: Final = frozenset({"type", "status", "priority"})
+
+
+def classify_key(key: str, parent: str | None = None) -> Classification:
+    """Classify a payload key, optionally using the key of its containing object.
+
+    By name, and that is the honest limit of it: a key called ``notes`` holding a pasted
+    password classifies as ``PUBLIC`` here. :func:`redact_text` is the second line of
+    defence for exactly that case, which is why every string value passes through it
     regardless of how its key classified.
+
+    ``parent`` exists for one word. See :data:`_CLASSIFICATION_PARENTS`.
     """
     lowered = key.lower()
     if lowered in _SECRET_KEYS:
         return Classification.SECRET
+    if lowered in _AMBIGUOUS_KEYS and (parent or "").lower() in _CLASSIFICATION_PARENTS:
+        return Classification.PUBLIC
     if lowered in _CONFIDENTIAL_KEYS:
         return Classification.CONFIDENTIAL
     return Classification.PUBLIC
@@ -276,11 +320,25 @@ def redact(payload: Any, *, salt: bytes | None = None) -> Redaction:
     return Redaction(result, marks)
 
 
-def _walk(value: Any, path: str, salt: bytes | None, marks: dict[str, Classification]) -> Any:
+def _walk(
+    value: Any,
+    path: str,
+    salt: bytes | None,
+    marks: dict[str, Classification],
+    parent: str | None = None,
+) -> Any:
     if isinstance(value, Mapping):
-        return {key: _leaf(key, item, f"{path}.{key}", salt, marks) for key, item in value.items()}
+        return {
+            key: _leaf(key, item, f"{path}.{key}", salt, marks, parent=parent)
+            for key, item in value.items()
+        }
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return [_walk(item, f"{path}[{index}]", salt, marks) for index, item in enumerate(value)]
+        # A list keeps its container's parent: entries under ``type`` are still under
+        # ``type``, whether there is one of them or ten.
+        return [
+            _walk(item, f"{path}[{index}]", salt, marks, parent=parent)
+            for index, item in enumerate(value)
+        ]
     if isinstance(value, str):
         return _mark_if_changed(value, redact_text(value), path, marks)
     return value
@@ -292,13 +350,15 @@ def _leaf(
     path: str,
     salt: bytes | None,
     marks: dict[str, Classification],
+    parent: str | None = None,
 ) -> Any:
     if isinstance(value, Mapping) or (
         isinstance(value, Sequence) and not isinstance(value, (str, bytes))
     ):
-        return _walk(value, path, salt, marks)
+        # Descending: this key becomes the parent of everything inside it.
+        return _walk(value, path, salt, marks, parent=key)
 
-    classification = classify_key(key)
+    classification = classify_key(key, parent=parent)
 
     if classification is Classification.SECRET:
         # Unconditional, and applied whatever the value's type — a numeric API key is

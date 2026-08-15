@@ -291,3 +291,101 @@ def test_adapter_config_rejects_exactly_what_shapes_rejects(bad):
 
     with pytest.raises(TenancyError):
         AdapterConfig(tenant_id=bad)
+
+
+# ----------------------------------------------------------------------------------
+# Scrubbing must not change what a translator decides — IDI-197
+# ----------------------------------------------------------------------------------
+#
+# The corpus is scrubbed before it is committed, so every parity run and every recorded
+# specification is built from pseudonymised payloads. If scrubbing changes a translator's
+# *decisions*, the corpus tests behaviour that never occurs in production — and parity
+# still passes, because both implementations see the same scrubbed input. That is what
+# happened with ConnectWise: `{"type": {"name": "Service"}}` scrubbed to `name-<hex>`,
+# category fell through to "unknown", and nothing was red.
+#
+# So: the values a translator *derives by interpreting* input must be identical before and
+# after scrubbing. Identifiers may differ — that is the entire point of scrubbing — and
+# fields that interpolate an identifier (Fleet's message embeds the hostname) differ with
+# them. Severity and category are pure interpretation, and they must not move.
+
+SCRUB_SALT = b"regression-salt"
+
+REPRESENTATIVE_PAYLOADS = {
+    "sciencelogic": {
+        "xid": "42",
+        "yname": "db01",
+        "severity": "4",
+        "category": "service",
+        "message": "SQL Server stopped on PROD-DB-01",
+        "organization": "/api/organization/42",
+    },
+    "connectwise": {
+        "id": 12345,
+        "summary": "Disk at 95% on FILE-SRV-02",
+        "company": {"id": 100, "identifier": "AcmeCorp", "name": "Acme Corporation"},
+        "priority": {"id": 1, "name": "High"},
+        "status": {"name": "New"},
+        "type": {"name": "Service"},
+        "dateEntered": "2025-03-10T14:30:00Z",
+    },
+    "fleet": {
+        "host_uuid": "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        "host_name": "mac-01",
+        "policy_name": "FileVault enabled",
+        "team_name": "Acme Corp",
+    },
+    "addigy": {
+        "id": "a1",
+        "severity": "high",
+        "alert_message": "FileVault disabled",
+        "policy_id": "pol-1",
+        "agentid": "agent-9",
+    },
+    "sl1": {"event_id": "1", "severity": "2", "message": "IIS application pool stopped"},
+    "legacy": {"id": "x", "platform": "custom", "severity": "P1", "message": "something"},
+}
+
+
+@pytest.mark.parametrize("source", sorted(REPRESENTATIVE_PAYLOADS))
+def test_scrubbing_does_not_change_what_a_translator_decides(source):
+    """severity and category are pure interpretation. Scrubbing must not move them."""
+    from pil_adapters import AdapterConfig, get_translator
+    from pil_contracts import redact
+
+    payload = REPRESENTATIVE_PAYLOADS[source]
+    config = AdapterConfig(tenant_id="tenant-acme")
+    clock = FrozenClock(datetime(2026, 3, 14, 15, 9, 26, 535897, tzinfo=UTC))
+
+    raw = get_translator(source, config, clock).translate(payload).body
+    scrubbed_payload = redact(payload, salt=SCRUB_SALT).payload
+    scrubbed = get_translator(source, config, clock).translate(scrubbed_payload).body
+
+    assert scrubbed.severity == raw.severity, (
+        f"{source}: scrubbing changed severity {raw.severity!r} -> {scrubbed.severity!r}. "
+        "The corpus would test a decision that never happens in production."
+    )
+    assert scrubbed.category == raw.category, (
+        f"{source}: scrubbing changed category {raw.category!r} -> {scrubbed.category!r}. "
+        "This is the IDI-197 defect: a classification value being treated as an identifier."
+    )
+
+
+def test_the_connectwise_case_that_caused_this():
+    """The regression, named, so a future key-list edit cannot quietly restore it.
+
+    `type.name` is the ticket type. Pseudonymised, `map_type_to_category` sees a hex blob,
+    finds no substring match, and returns "unknown" for every ticket.
+    """
+    from pil_adapters import AdapterConfig, get_translator
+    from pil_contracts import redact
+
+    payload = REPRESENTATIVE_PAYLOADS["connectwise"]
+    config = AdapterConfig(tenant_id="tenant-acme")
+
+    scrubbed = redact(payload, salt=SCRUB_SALT).payload
+    assert scrubbed["type"]["name"] == "Service", "the ticket type must survive scrubbing"
+    assert scrubbed["company"]["name"] != "Acme Corporation", "the client name must not"
+
+    category = get_translator("connectwise", config).translate(scrubbed).body.category
+    assert category == "service", f"expected 'service', got {category!r}"

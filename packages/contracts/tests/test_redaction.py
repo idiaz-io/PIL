@@ -305,14 +305,16 @@ def test_construction_does_not_redact():
 
 
 def test_confidential_key_list_matches_axos_verbatim():
-    """Moving ownership must not change output.
+    """The key list is still AXO's, verbatim.
 
-    AXO's `pil_capture.py:75-113` is the incumbent and is tuned to these vendors — `yname`
-    and `aligned_resource_name` are ScienceLogic field names that a generic list would stop
-    protecting. This is that mapping, copied rather than imported: PIL may not import a
-    product (I-3), so the drift guard has to be a literal.
+    AXO's `pil_capture.py:75-113` was the incumbent and is tuned to these vendors —
+    `yname` and `aligned_resource_name` are ScienceLogic field names that a generic list
+    would stop protecting. This is that mapping, copied rather than imported: PIL may not
+    import a product (I-3), so the drift guard has to be a literal.
 
-    Changing the list is allowed. Changing it in the same commit that moves it is not.
+    Note what this test does *not* say. Behaviour deliberately diverges from AXO's original
+    scrubber for one key — see `test_a_classification_name_is_not_pseudonymised`. The list
+    is unchanged; how `name` is applied is not.
     """
     from pil_contracts.redaction import _CONFIDENTIAL_KEYS
 
@@ -350,3 +352,94 @@ def test_confidential_key_list_matches_axos_verbatim():
         "owner": "user",
         "contact": "user",
     }
+
+
+# ----------------------------------------------------------------------------------
+# `name` is ambiguous — IDI-197
+# ----------------------------------------------------------------------------------
+#
+# The defect: ConnectWise carries its ticket type as {"type": {"name": "Service"}}.
+# Pseudonymising it turned "Service" into "name-f342a885ad39", map_type_to_category found
+# no substring match, and every scrubbed ConnectWise ticket classified as "unknown".
+#
+# What made it dangerous rather than merely wrong: parity still PASSED. Both
+# implementations saw the same scrubbed input and both said "unknown", so the one check
+# built to catch this could not — and --record-golden would have written "unknown" into
+# the committed specification for payloads whose real category is "service".
+
+
+@pytest.mark.parametrize(
+    ("parent", "value"),
+    [("type", "Service"), ("status", "New"), ("priority", "High")],
+)
+def test_a_classification_name_is_not_pseudonymised(parent, value):
+    """Under a classification container, `name` is a fixed vocabulary, not a customer."""
+    payload = {parent: {"name": value}}
+    assert redact(payload, salt=SALT).payload == payload
+
+
+@pytest.mark.parametrize("parent", ["device", "company", "owner", "member", "host"])
+def test_an_identity_name_is_still_pseudonymised(parent):
+    """The protection this exists for. `device.name` is a hostname.
+
+    `sciencelogic.py:127` reads it as the device name and `connectwise.py:88` reads
+    `company.name` as the client. Losing these would be a leak, which is not a trade worth
+    making for coverage.
+    """
+    result = redact({parent: {"name": "web01"}}, salt=SALT)
+    assert result.payload[parent]["name"] != "web01"
+    assert result.payload[parent]["name"].startswith("name-")
+    assert result.marks == {f"$.{parent}.name": Classification.CONFIDENTIAL}
+
+
+@pytest.mark.parametrize("payload", [{"name": "web01"}, {"widget": {"name": "web01"}}])
+def test_an_unrecognised_or_absent_parent_keeps_the_protection(payload):
+    """The bias, asserted.
+
+    A missed pseudonym is a customer's hostname in a committed fixture; a needless one is
+    a coverage gap. Those are not comparable, so anything unrecognised stays protected —
+    including a bare top-level `name` with no parent at all.
+    """
+    scrubbed = redact(payload, salt=SALT).payload
+    assert "web01" not in str(scrubbed)
+
+
+def test_only_name_is_treated_as_ambiguous():
+    """Every other confidential key is unambiguous, and should stay that way.
+
+    `hostname` is never anything but a hostname. This set staying small is what keeps the
+    parent rule from becoming a second, quieter classification system.
+    """
+    from pil_contracts.redaction import _AMBIGUOUS_KEYS
+
+    assert frozenset({"name"}) == _AMBIGUOUS_KEYS
+
+
+def test_the_classification_parent_list_stays_justified():
+    """Each entry must be a container whose `name` cannot be a customer.
+
+    Pinned so that widening it is a deliberate edit with an argument attached, rather than
+    somebody adding `company` to make a test pass.
+    """
+    from pil_contracts.redaction import _CLASSIFICATION_PARENTS
+
+    assert frozenset({"type", "status", "priority"}) == _CLASSIFICATION_PARENTS
+    for identity in ("company", "device", "owner", "member", "host", "organization"):
+        assert identity not in _CLASSIFICATION_PARENTS
+
+
+def test_the_parent_rule_does_not_leak_across_nesting():
+    """A safe parent must not shelter a nested identity container.
+
+    `{"type": {"company": {"name": ...}}}` is contrived, but the walk carries the nearest
+    parent rather than the outermost one, and that is worth pinning before someone
+    refactors it into carrying a path prefix.
+    """
+    result = redact({"type": {"company": {"name": "Acme"}}}, salt=SALT)
+    assert result.payload["type"]["company"]["name"] != "Acme"
+
+
+def test_a_classification_name_inside_a_list_still_survives():
+    """Lists keep their container's parent — ten ticket types behave like one."""
+    payload = {"type": [{"name": "Service"}, {"name": "Project"}]}
+    assert redact(payload, salt=SALT).payload == payload
