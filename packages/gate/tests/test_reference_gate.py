@@ -55,7 +55,7 @@ def test_row_1_read_allows_observe_only() -> None:
     assert result.decision_id == "fixed"
 
 
-def test_row_2_tenants_crossed_denies() -> None:
+def test_row_1_tenants_crossed_denies() -> None:
     result = _gate().decide(
         _request(
             blast_radius=BlastRadius(
@@ -173,17 +173,69 @@ def test_reference_gate_never_produces_safe_auto_heal(
         assert result.tier is Tier.OBSERVE_ONLY
 
 
-def test_read_beats_blast_radius_and_breaker() -> None:
-    """Row 1 is first. A read is observation even with a scary blast radius."""
+def test_cross_tenant_read_is_denied() -> None:
     result = _gate().decide(
         _request(
             capability=READ,
             blast_radius=BlastRadius(
-                tenants_crossed=9,
-                mission_critical_downstream=4,
-                max_depth_hit=True,
+                tenants_crossed=1,
+                mission_critical_downstream=0,
+                max_depth_hit=False,
             ),
-            breaker=Breaker(class_rate_1h=99, tripped=True),
+        )
+    )
+    assert result.decision is Decision.DENY
+    assert result.tier is Tier.BLOCKED_BY_DEFAULT
+    assert "tenants_crossed=1" in result.reason
+
+
+@pytest.mark.parametrize(
+    "capability",
+    [c for c in Capability if CAPABILITIES[c].risk is Risk.READ],
+)
+def test_cross_tenant_deny_precedes_read_for_every_read_capability(
+    capability: Capability,
+) -> None:
+    result = _gate().decide(
+        _request(
+            capability=capability,
+            blast_radius=BlastRadius(
+                tenants_crossed=1,
+                mission_critical_downstream=0,
+                max_depth_hit=False,
+            ),
+        )
+    )
+    assert result.decision is Decision.DENY
+    assert result.tier is Tier.BLOCKED_BY_DEFAULT
+
+
+def test_in_tenant_read_is_still_observe_only() -> None:
+    result = _gate().decide(
+        _request(
+            capability=READ,
+            blast_radius=BlastRadius(
+                tenants_crossed=0,
+                mission_critical_downstream=0,
+                max_depth_hit=False,
+            ),
+        )
+    )
+    assert result.decision is Decision.ALLOW
+    assert result.tier is Tier.OBSERVE_ONLY
+    assert result.required_approvers == 0
+
+
+def test_tripped_breaker_does_not_affect_a_read() -> None:
+    result = _gate().decide(
+        _request(
+            capability=READ,
+            blast_radius=BlastRadius(
+                tenants_crossed=0,
+                mission_critical_downstream=0,
+                max_depth_hit=False,
+            ),
+            breaker=Breaker(class_rate_1h=9, tripped=True),
         )
     )
     assert result.decision is Decision.ALLOW

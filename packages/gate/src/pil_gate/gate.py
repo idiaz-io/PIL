@@ -59,16 +59,6 @@ class ReferenceGate(PolicyGate):
             raise ValueError("required_approvers must be > 0")
 
     def decide(self, request: GateRequest) -> GateDecision:
-        risk = CAPABILITIES[request.capability].risk
-        if risk is Risk.READ:
-            return self._emit(
-                request,
-                Decision.ALLOW,
-                Tier.OBSERVE_ONLY,
-                required_approvers=0,
-                approval_ttl=None,
-                reason="read capability — observe only, never act",
-            )
         blast = request.blast_radius
         if blast is not None and blast.tenants_crossed > 0:
             return self._emit(
@@ -78,6 +68,16 @@ class ReferenceGate(PolicyGate):
                 required_approvers=self.required_approvers,
                 approval_ttl=None,
                 reason=f"blast radius tenants_crossed={blast.tenants_crossed}",
+            )
+        risk = CAPABILITIES[request.capability].risk
+        if risk is Risk.READ:
+            return self._emit(
+                request,
+                Decision.ALLOW,
+                Tier.OBSERVE_ONLY,
+                required_approvers=0,
+                approval_ttl=None,
+                reason="read capability — observe only, never act",
             )
         breaker = request.breaker
         if breaker is not None and breaker.tripped:
