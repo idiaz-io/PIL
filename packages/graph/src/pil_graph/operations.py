@@ -127,6 +127,12 @@ class UpsertEdge:
     edge that crosses tenants. That is a structural property, provable by
     inspecting the dataclass's own fields (see ``tests/test_graph_tenancy.py``), not
     merely something validated at construction time.
+
+    A real graph does not raise when the ``MATCH`` half finds no endpoint —
+    it silently returns zero rows and ``MERGE`` never runs, so
+    :meth:`to_cypher` ends with a ``RETURN count(r)`` a driver can inspect
+    (see :meth:`pil_graph.driver.GraphDriver.upsert_edge`), rather than
+    leaving that driver with no signal at all.
     """
 
     tenant_id: str
@@ -148,12 +154,20 @@ class UpsertEdge:
     def to_cypher(self) -> tuple[str, dict[str, Any]]:
         """Matches both endpoints by their tenant-scoped ``uid`` before MERGE-ing
         the relationship — an edge cannot be created to a node the MATCH doesn't
-        find, and the MATCH is scoped to this operation's one tenant."""
+        find, and the MATCH is scoped to this operation's one tenant.
+
+        Ends with ``RETURN count(r)``: Cypher aggregation over zero input rows
+        still yields one row with the count at ``0`` (never zero rows outright),
+        so a driver that finds neither endpoint sees a real, checkable ``0``
+        rather than nothing at all — that's what lets
+        :class:`~pil_graph.driver.GraphDriver` require raising
+        :class:`LookupError` in that case."""
         cypher = (
             f"MATCH (a:{self.from_label.value} {{uid: $from_uid}}), "
             f"(b:{self.to_label.value} {{uid: $to_uid}}) "
             f"MERGE (a)-[r:{self.edge_type.value}]->(b) "
-            "SET r += $props, r.tenant_id = $tenant"
+            "SET r += $props, r.tenant_id = $tenant "
+            "RETURN count(r) AS relationships_written"
         )
         params = {
             "from_uid": uid(self.tenant_id, self.from_id),

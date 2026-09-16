@@ -135,6 +135,23 @@ def test_upsert_edge_cypher_matches_both_endpoints_before_merging() -> None:
     assert params["tenant"] == "tenant-a"
 
 
+def test_upsert_edge_cypher_ends_with_a_countable_return() -> None:
+    """The signal a real driver needs to detect a missing endpoint: MATCH
+    finding zero rows means MERGE never runs, but RETURN count(r) still
+    yields one row with count 0 rather than no rows at all."""
+    op = UpsertEdge(
+        tenant_id="tenant-a",
+        edge_type=EdgeType.RUNS_ON,
+        from_label=NodeLabel.ASSET,
+        from_id="host-1",
+        to_label=NodeLabel.MISSION,
+        to_id="mission-1",
+    )
+    cypher, _ = op.to_cypher()
+    assert cypher.rstrip().endswith("RETURN count(r) AS relationships_written")
+    assert cypher.index("MERGE (a)-[r:RUNS_ON]->(b)") < cypher.index("RETURN count(r)")
+
+
 # ---------------------------------------------------------------------------
 # CountNodes
 # ---------------------------------------------------------------------------

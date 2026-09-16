@@ -46,7 +46,32 @@ class GraphDriver(ABC):
 
     @abstractmethod
     def upsert_edge(self, operation: UpsertEdge) -> None:
-        """Apply one :class:`~pil_graph.operations.UpsertEdge`."""
+        """Apply one :class:`~pil_graph.operations.UpsertEdge`.
+
+        **MUST raise** :class:`LookupError` **if either endpoint does not
+        exist** for this operation's tenant. This does not happen for free.
+        ``operation.to_cypher()`` produces ``MATCH (a) ... MERGE (a)-[r]->(b)``
+        — if the ``MATCH`` finds no rows, Neo4j (and openCypher generally)
+        does not raise: it returns zero rows, ``MERGE`` never runs, and the
+        query completes successfully having done nothing. A driver that just
+        executes the query and returns has silently dropped the edge, not
+        failed loudly.
+
+        The Cypher already gives an implementation the signal it needs:
+        :meth:`~pil_graph.operations.UpsertEdge.to_cypher` ends with
+        ``RETURN count(r) AS relationships_written``. Cypher's aggregation
+        semantics mean this still returns exactly one row even when the
+        ``MATCH`` found nothing — with the count at ``0`` — rather than
+        producing zero result rows outright. Run the query, read that
+        column, and raise ``LookupError`` when it is ``0``. "The query
+        executed without error" is not evidence the edge was written; the
+        count is.
+
+        :class:`~pil_graph.fakes.InMemoryGraphDriver` raises this by
+        checking its own node set before merging, which is why its tests
+        cannot, by themselves, prove a real driver behaves the same way —
+        that must be a driver-level integration test against a real engine.
+        """
 
     @abstractmethod
     def count_nodes(self, operation: CountNodes) -> int:
