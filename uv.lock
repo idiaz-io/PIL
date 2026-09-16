@@ -11,6 +11,7 @@ members = [
     "pil-adapters",
     "pil-capabilities",
     "pil-contracts",
+    "pil-gate",
     "pil-graph",
     "pil-workspace",
 ]
@@ -296,6 +297,17 @@ version = "0.1.0"
 source = { editable = "packages/contracts" }
 
 [[package]]
+name = "pil-gate"
+version = "0.1.0"
+source = { editable = "packages/gate" }
+dependencies = [
+    { name = "pil-capabilities" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pil-capabilities", editable = "packages/capabilities" }]
+
+[[package]]
 name = "pil-graph"
 version = "0.1.0"
 source = { editable = "packages/graph" }
@@ -317,6 +329,7 @@ dev = [
     { name = "pil-adapters" },
     { name = "pil-capabilities" },
     { name = "pil-contracts" },
+    { name = "pil-gate" },
     { name = "pil-graph" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -331,6 +344,7 @@ dev = [
     { name = "pil-adapters", editable = "packages/adapters" },
     { name = "pil-capabilities", editable = "packages/capabilities" },
     { name = "pil-contracts", editable = "packages/contracts" },
+    { name = "pil-gate", editable = "packages/gate" },
     { name = "pil-graph", editable = "packages/graph" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },

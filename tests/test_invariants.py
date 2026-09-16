@@ -25,6 +25,7 @@ CONTRACTS_SRC = REPO_ROOT / "packages" / "contracts" / "src"
 ADAPTERS_SRC = REPO_ROOT / "packages" / "adapters" / "src"
 GRAPH_SRC = REPO_ROOT / "packages" / "graph" / "src"
 CAPABILITIES_SRC = REPO_ROOT / "packages" / "capabilities" / "src"
+GATE_SRC = REPO_ROOT / "packages" / "gate" / "src"
 FIXTURES = REPO_ROOT / "fixtures"
 
 #: Every MERP product. Nothing in PIL may import any of them, nor AXO's `backend`
@@ -61,7 +62,7 @@ def imported_roots(path: Path) -> set[str]:
 def test_no_pil_module_imports_a_product():
     """Catches dynamic and function-local imports that the ruff rule cannot see."""
     offenders: list[str] = []
-    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC, GRAPH_SRC, CAPABILITIES_SRC):
+    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC, GRAPH_SRC, CAPABILITIES_SRC, GATE_SRC):
         for path in python_files(source_root):
             banned = imported_roots(path) & PRODUCT_MODULES
             if banned:
@@ -152,6 +153,37 @@ def test_capabilities_imports_nothing_from_this_repo_or_outside_the_stdlib():
 
 
 # ----------------------------------------------------------------------------------
+# gate depends only on pil-capabilities (ADR-0013)
+# ----------------------------------------------------------------------------------
+
+
+def test_gate_depends_only_on_capabilities():
+    config = tomllib.loads(
+        (REPO_ROOT / "packages" / "gate" / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    names = [dep.split(">=")[0].split("==")[0].strip() for dep in config["project"]["dependencies"]]
+    assert names == ["pil-capabilities"]
+
+
+def test_gate_imports_only_capabilities_and_the_stdlib():
+    allowed = {"pil_gate", "pil_capabilities", "__future__"}
+    stdlib = {
+        "abc",
+        "collections",
+        "dataclasses",
+        "datetime",
+        "enum",
+        "typing",
+        "uuid",
+    }
+    offenders: list[str] = []
+    for path in python_files(GATE_SRC):
+        for module in imported_roots(path) - allowed - stdlib:
+            offenders.append(f"{path.relative_to(REPO_ROOT)} imports {module!r}")
+    assert not offenders, "\n".join(offenders)
+
+
+# ----------------------------------------------------------------------------------
 # I-1 · PIL is a library
 # ----------------------------------------------------------------------------------
 
@@ -160,7 +192,7 @@ def test_nothing_in_pil_imports_a_web_framework_or_a_socket():
     """No HTTP surface, no server, no long-running process."""
     forbidden = {"fastapi", "flask", "django", "starlette", "uvicorn", "socket", "socketserver"}
     offenders: list[str] = []
-    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC, GRAPH_SRC, CAPABILITIES_SRC):
+    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC, GRAPH_SRC, CAPABILITIES_SRC, GATE_SRC):
         for path in python_files(source_root):
             found = imported_roots(path) & forbidden
             if found:

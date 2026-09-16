@@ -22,7 +22,7 @@ part of that claim (cut, and not PIL's to own).
 | Graph access path | Tenant-scoped query builder + interface over the closed ITKG vocabulary. No live Neo4j driver. | Hiba | Wed | **Ships this week.** |
 | Adapter framework (finish) | Real `ConnectionProvider` + Fleet's connect/fetch/execute, ported from AXO. | Hiba | Thu–Fri | **Conditional.** Ships this week only if the credential-scoping memo is approved by end of Wednesday. Drops out of the week, explicitly, otherwise — see Thursday/Friday fallback. |
 | Fixture corpus + test suite | Real (where reachable) or labeled-synthetic payloads per source, scrubbed, plus the known harness bug fixed. | Shabbar | Mon–Wed | **Ships this week.** |
-| Policy gate | Answers: may this act run — allow / hold / deny. Interface **and** a real implementation **and** tests. | Shabbar | Thu | **Ships this week.** |
+| Policy gate | Answers: may this act run — allow / hold / deny. Interface **and** a real implementation **and** tests. | Shabbar | Thu | **Shipped.** Reference implementation; no `safe-auto-heal`, no ledger write. |
 | Sealed ledger | Signed, hash-chained, offline-verifiable evidence. Interface **and** a real implementation **and** tests. | Shabbar | Fri | **Ships this week.** |
 | Bus + orchestrator | How work would move between products and roll back. | *None* | *None* | **Cut** (ADR-0009) — zero consumers, AXO has its own queue. Reviving it needs a new ADR overturning that one, not a day on this week's schedule. |
 | Gateway | One door for auth/authz/tenancy-scoping/rate-limiting/audit, per the architecture diagram. | *None* | *None* | **Blocked**, structurally — I-1 means it can't be PIL's regardless of who owns it. `[NEEDS-DECISION: gateway-ownership]` — not this week's to resolve. |
@@ -161,8 +161,8 @@ dataclass — given a capability's risk and an actor's held permissions,
 returns a consistent decision — plus a test double alongside it for
 consumers that don't need the real logic.
 
-**Exit:** the interface, a working reference implementation, and a passing
-test suite. One day.
+**Exit:** shipped — interface, `ReferenceGate`, `StaticGate`, passing tests.
+No `safe-auto-heal` from the reference implementation, no ledger write.
 
 ## Friday — Hiba: adapter framework, day 2 of 2 (conditional)
 
