@@ -6,6 +6,7 @@ anything or retries anything; a translator turns one payload into one
 """
 
 from pil_adapters.base import AdapterConfig, Translation, Translator
+from pil_adapters.capabilities import TRANSLATOR_CAPABILITIES, capabilities_for
 from pil_adapters.clock import Clock, FrozenClock, SystemClock
 from pil_adapters.connection import (
     Access,
@@ -27,6 +28,7 @@ from pil_adapters.translators.sciencelogic import ScienceLogicTranslator
 from pil_adapters.translators.sl1_healing import SL1HealingTranslator
 
 __all__ = [
+    "TRANSLATOR_CAPABILITIES",
     "TRANSLATOR_TYPES",
     "Access",
     "AdapterConfig",
@@ -53,5 +55,6 @@ __all__ = [
     "Translation",
     "Translator",
     "build_registry",
+    "capabilities_for",
     "get_translator",
 ]

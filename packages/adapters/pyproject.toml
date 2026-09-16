@@ -12,6 +12,7 @@ requires-python = ">=3.12"
 # dependency and its own ADR.
 dependencies = [
     "pil-contracts>=0.1.0",
+    "pil-capabilities>=0.1.0",
 ]
 
 [build-system]
