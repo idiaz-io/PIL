@@ -412,6 +412,34 @@ the harness process itself before anything reads a clock, not only for AXO's sub
 bug found by an epoch fixture. Both sides share one frozen instant (`:59`). Without this,
 "byte-identical" would not be claimable at all, given preserved defects 4 and 5.
 
+**Addendum, 2026-09-16 — `AXO_PARITY_SHA` must point at `merp-integration`, not `main`.**
+`main` has taken no commits since 2026-04-07 (its last merge, PR #35 from `staging`); the
+branch that actually carries the translator behaviour PIL's six translators were ported
+from is `merp-integration` (PR #47, merged 2026-08-15, itself the merge of a branch named
+`merp-itkg-spine`). This isn't "`main` is a few months stale" — checked directly, blob for
+blob, at each branch's current tip:
+
+| Source file PIL ported from | On `main`? |
+|---|---|
+| `backend/integrations/addigy_adapter.py` | **Does not exist on `main` at all** |
+| `backend/integrations/fleet_healing_adapter.py` | **Does not exist on `main` at all** |
+| `backend/integrations/sl1_adapter.py` | Not at this path — `main` has a *different-path* `backend/services/adapters/sl1_adapter.py` instead, not confirmed equivalent |
+| `backend/routes/webhook.py` (source for `legacy.py`) | Exists on both, but a **different blob** — genuinely different content |
+| `integrations/connectwise/ticket_normaliser.py` | Byte-identical on both — branch-independent |
+| `integrations/sciencelogic/normaliser.py` | Byte-identical on both — branch-independent |
+
+Pinning `AXO_PARITY_SHA` to `main` would not compare `addigy`/`fleet` against an older
+version of their source — `main`'s `backend/integrations/` directory contains only
+`__init__.py` and `connectwise/`, so the file the parity harness would need to check
+against for those two translators isn't there to check against at all. Only the
+`connectwise` and `sciencelogic` translators are unaffected by which branch is pinned.
+
+**Recommended pin: `b04cae7ef84818e38df99e01358d375a72dbd964`** (`merp-integration`'s
+current tip at time of writing) — subject to confirmation by whoever captures the fixture
+corpus (Shabbar, per `PIL-PLAN.md`), since the pin and the corpus need to describe the same
+AXO behaviour. Not yet configured anywhere; this is a note for whoever sets
+`AXO_PARITY_SHA`, not a decision this repo can enforce on its own.
+
 ---
 
 ## The four tests that close this out
