@@ -75,3 +75,44 @@ exactly that).
 
 **Not fixed here.** It's real, it's cheap, and it isn't the current phase's work — recording
 it rather than bundling an unrelated fix into whatever commit comes next.
+
+---
+
+## `MERP-Agent-Handover.md` §6.2 gives edge-type *names*, not literal strings — filed against `idiaz-io/merp-console`
+
+**Found:** 2026-09-15, cross-checking `pil_graph.vocabulary`'s 13 edge types byte-for-byte
+against AXO's `packages/itkg/vocab.go` and against the handover section both were built from.
+
+**The three sources, side by side (first three of thirteen; the pattern holds for all):**
+
+| `pil_graph/vocabulary.py` | AXO `vocab.go` | `MERP-Agent-Handover.md` §6.2 |
+|---|---|---|
+| `RUNS_ON` | `RUNS_ON` | `runs-on` |
+| `DEPENDS_ON` | `DEPENDS_ON` | `depends-on` |
+| `OWNED_BY` | `OWNED_BY` | `owned-by` |
+
+**The problem.** PIL and AXO agree with each other exactly, on every one of the 13 — this
+is not the two packages drifting apart. Both independently rendered the handover's prose
+names (`runs-on`, `depends-on`, …) as `SCREAMING_SNAKE_CASE` Neo4j relationship-type
+literals, because that's Neo4j's own relationship-type convention and the handover's §6.2
+never states a literal casing — it lists names in running prose
+("`runs-on`, `depends-on`, `owned-by`, …"), not a fenced, quoted string constant the way
+§6.1's node-label table does (`` `Tenant` ``, `` `Mission` ``, … — those *are* the literal
+values, and all three sources agree on them character-for-character).
+
+These are real Neo4j relationship types, written into a live graph. If a future third
+implementation reads §6.2 literally and writes `runs-on` (or any other casing) as the actual
+relationship type, it produces a graph neither PIL's nor AXO's queries can see — not a typo,
+a silent split of the graph's edge namespace in two, findable only by an empty query result
+with no error anywhere.
+
+**Ask.** §6.2 should pin the literal string for each of the 13 edge types explicitly — the
+same way §6.1 already does for the 10 node labels — rather than leaving casing to be inferred
+from "this is a Neo4j edge type, so use the Neo4j convention." Two independent
+implementations guessed the same way this time; that's luck, not a guarantee for whichever
+implementation comes third (`gateway`, a future non-PIL/non-AXO consumer, etc.).
+
+**Not fixed here, and no code changed.** This is a note against `MERP-Agent-Handover.md`,
+which lives in `idiaz-io/merp-console`, not this repo. Filed here because the finding came
+from work in `packages/graph`; whoever owns ADR-08's ratification of §6.1/§6.2 should decide
+whether to amend the handover directly or note it in the ADR-08 discussion.
