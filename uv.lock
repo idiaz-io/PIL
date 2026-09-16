@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "pil-adapters",
+    "pil-capabilities",
     "pil-contracts",
     "pil-graph",
     "pil-workspace",
@@ -274,11 +275,20 @@ name = "pil-adapters"
 version = "0.1.0"
 source = { editable = "packages/adapters" }
 dependencies = [
+    { name = "pil-capabilities" },
     { name = "pil-contracts" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pil-contracts", editable = "packages/contracts" }]
+requires-dist = [
+    { name = "pil-capabilities", editable = "packages/capabilities" },
+    { name = "pil-contracts", editable = "packages/contracts" },
+]
+
+[[package]]
+name = "pil-capabilities"
+version = "0.1.0"
+source = { editable = "packages/capabilities" }
 
 [[package]]
 name = "pil-contracts"
@@ -305,6 +315,7 @@ source = { virtual = "." }
 dev = [
     { name = "mypy" },
     { name = "pil-adapters" },
+    { name = "pil-capabilities" },
     { name = "pil-contracts" },
     { name = "pil-graph" },
     { name = "pytest" },
@@ -318,6 +329,7 @@ dev = [
 dev = [
     { name = "mypy", specifier = ">=1.14" },
     { name = "pil-adapters", editable = "packages/adapters" },
+    { name = "pil-capabilities", editable = "packages/capabilities" },
     { name = "pil-contracts", editable = "packages/contracts" },
     { name = "pil-graph", editable = "packages/graph" },
     { name = "pytest", specifier = ">=8.3.4" },
