@@ -23,6 +23,7 @@ from pil_adapters.base import Translation
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS_SRC = REPO_ROOT / "packages" / "contracts" / "src"
 ADAPTERS_SRC = REPO_ROOT / "packages" / "adapters" / "src"
+GRAPH_SRC = REPO_ROOT / "packages" / "graph" / "src"
 FIXTURES = REPO_ROOT / "fixtures"
 
 #: Every MERP product. Nothing in PIL may import any of them, nor AXO's `backend`
@@ -59,7 +60,7 @@ def imported_roots(path: Path) -> set[str]:
 def test_no_pil_module_imports_a_product():
     """Catches dynamic and function-local imports that the ruff rule cannot see."""
     offenders: list[str] = []
-    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC):
+    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC, GRAPH_SRC):
         for path in python_files(source_root):
             banned = imported_roots(path) & PRODUCT_MODULES
             if banned:
@@ -132,7 +133,7 @@ def test_nothing_in_pil_imports_a_web_framework_or_a_socket():
     """No HTTP surface, no server, no long-running process."""
     forbidden = {"fastapi", "flask", "django", "starlette", "uvicorn", "socket", "socketserver"}
     offenders: list[str] = []
-    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC):
+    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC, GRAPH_SRC):
         for path in python_files(source_root):
             found = imported_roots(path) & forbidden
             if found:

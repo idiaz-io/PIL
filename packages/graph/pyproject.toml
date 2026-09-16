@@ -1,0 +1,25 @@
+[project]
+name = "pil-graph"
+version = "0.1.0"
+description = "Tenant-scoped ITKG query construction and the driver interface a real graph client implements."
+requires-python = ">=3.12"
+
+# Separately versioned and released from contracts and adapters (mirrors §8 decision 6
+# for adapters). Depends only on pil-contracts, not pil-adapters -- graph access has
+# nothing to do with vendor translation.
+#
+# No graph-client dependency appears here on purpose (ADR-0011): PIL ships the query
+# builder and the driver interface, never a live connection. A real implementation --
+# Neo4j, Memgraph, AGE, or an in-memory fake for tests -- brings its own dependency and
+# lives behind pil_graph.driver.GraphDriver, the same boundary pil_adapters.connection
+# draws for a real secret resolver.
+dependencies = [
+    "pil-contracts>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pil_graph"]

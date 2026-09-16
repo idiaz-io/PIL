@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "pil-adapters",
     "pil-contracts",
+    "pil-graph",
     "pil-workspace",
 ]
 
@@ -285,6 +286,17 @@ version = "0.1.0"
 source = { editable = "packages/contracts" }
 
 [[package]]
+name = "pil-graph"
+version = "0.1.0"
+source = { editable = "packages/graph" }
+dependencies = [
+    { name = "pil-contracts" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pil-contracts", editable = "packages/contracts" }]
+
+[[package]]
 name = "pil-workspace"
 version = "0.0.0"
 source = { virtual = "." }
@@ -294,6 +306,7 @@ dev = [
     { name = "mypy" },
     { name = "pil-adapters" },
     { name = "pil-contracts" },
+    { name = "pil-graph" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -306,6 +319,7 @@ dev = [
     { name = "mypy", specifier = ">=1.14" },
     { name = "pil-adapters", editable = "packages/adapters" },
     { name = "pil-contracts", editable = "packages/contracts" },
+    { name = "pil-graph", editable = "packages/graph" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "ruff", specifier = ">=0.9.0" },
