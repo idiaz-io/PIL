@@ -1,6 +1,7 @@
 # ADR-0013 — The policy gate: `pil_gate`, its vocabulary, and what it deliberately does not do
 
-**Status:** Accepted — decided by Muhammad Shabbar, 2026-09-16 ·
+**Status:** Accepted — decided by Muhammad Shabbar, 2026-09-16 · **Amended** 2026-09-16
+(decision-table row order; see "Amendment 01" below) ·
 **Relates to:** ADR-0011 (a closed vocabulary gets its own package; no live driver ships from
 PIL), ADR-0012 (`pil-capabilities` — this gate is the "second consumer" that ADR names),
 ADR-0009 (bus cut; the gate emits nothing to a bus), `docs/reference/PIL-PLAN.md`
@@ -65,8 +66,10 @@ Six sub-decisions, each one paragraph:
 6. **Blast radius and breaker are typed, optional inputs — `None` means "not computed", never
    "safe".** `BlastRadius` and `Breaker` carry §6.5's fields exactly. In v1 the only `allow`
    for a write-risk capability is the human-signed one, so an absent blast radius can never
-   widen an outcome; a present one can only narrow it (`tenants_crossed > 0` → `deny`;
-   `breaker.tripped` → `hold`). Computing them is the caller's job — AXO's, via `pil_graph` —
+   widen an outcome; a present one can only narrow it —
+   `tenants_crossed > 0` → `deny` **for every risk level, reads included** (a read that
+   crosses a tenant boundary is the I-5 failure, not observation); `breaker.tripped` → `hold`
+   for writes. Computing them is the caller's job — AXO's, via `pil_graph` —
    and stays so until a product actually needs the gate to do it (I-2).
 
 ## Context
@@ -98,8 +101,8 @@ Evaluated top to bottom; first match wins. Every row is a test.
 | # | Condition | `decision` | `tier` | Notes |
 |---|---|---|---|---|
 | 0 | `tenant_id` blank | — | — | `ValueError` at `GateRequest` construction (I-5, same as `pil_graph._require`) |
-| 1 | `risk == READ` | `allow` | `observe-only` | Sub-decision 3. `required_approvers = 0`, `approval_ttl = None`. The console's CHECK is `> 0` only because reads never reach its gate (`auto_read`); PIL records them, so `0` is the honest value and `GateDecision` allows `>= 0` |
-| 2 | `blast_radius.tenants_crossed > 0` | `deny` | `blocked-by-default` | Cross-tenant write is never a hold; reason names the count |
+| 1 | `blast_radius.tenants_crossed > 0` | `deny` | `blocked-by-default` | **Any risk, including read.** A tenant boundary crossed is never observation; reason names the count |
+| 2 | `risk == READ` | `allow` | `observe-only` | Sub-decision 3. `required_approvers = 0`, `approval_ttl = None`. The console's CHECK is `> 0` only because reads never reach its gate (`auto_read`); PIL records them, so `0` is the honest value and `GateDecision` allows `>= 0` |
 | 3 | `breaker.tripped` | `hold` | `approval-required` | §6.5: a tripped breaker routes to human review; reason names the class rate |
 | 4 | `actor.kind == HUMAN` and `GRANT_SIGN in actor.permissions` | `allow` | `approval-required` | The `sign_write_grant` path. `required_approvers` from config (≥ 1) |
 | 5 | otherwise (service actor, or human without `org.grant.sign`) | `hold` | `approval-required` | The `pending_requests` path. `approval_ttl` from config |
@@ -160,3 +163,13 @@ lands Friday. Coupling either way is premature.
   **Real (reference implementation; no `safe-auto-heal`, no ledger write)** — in the same
   commit as the code, so the docs never claim something the tree does not contain.
 - `PIL-PLAN.md` Thursday row: state → shipped, once `make check` passes on `dev`.
+
+## Amendment 01 — 2026-09-16
+
+The table as first accepted evaluated the read rule before the cross-tenant rule, so a
+`Risk.READ` capability with `blast_radius.tenants_crossed > 0` was allowed. Found by probing
+the shipped `ReferenceGate` directly, the same day it landed and before it was pushed. Fixed
+by swapping the two rows: a crossed tenant boundary is checked first and denies regardless of
+risk. Sub-decision 3 (`observe-only` is the tier of an allowed read) is unchanged — it now
+applies only to reads that stay inside the tenant. `docs/known-issues.md` is not used for
+this because it was fixed, not deferred.
