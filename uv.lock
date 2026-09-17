@@ -13,6 +13,7 @@ members = [
     "pil-contracts",
     "pil-gate",
     "pil-graph",
+    "pil-ledger",
     "pil-workspace",
 ]
 
@@ -319,6 +320,11 @@ dependencies = [
 requires-dist = [{ name = "pil-contracts", editable = "packages/contracts" }]
 
 [[package]]
+name = "pil-ledger"
+version = "0.1.0"
+source = { editable = "packages/ledger" }
+
+[[package]]
 name = "pil-workspace"
 version = "0.0.0"
 source = { virtual = "." }
@@ -331,6 +337,7 @@ dev = [
     { name = "pil-contracts" },
     { name = "pil-gate" },
     { name = "pil-graph" },
+    { name = "pil-ledger" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -346,6 +353,7 @@ dev = [
     { name = "pil-contracts", editable = "packages/contracts" },
     { name = "pil-gate", editable = "packages/gate" },
     { name = "pil-graph", editable = "packages/graph" },
+    { name = "pil-ledger", editable = "packages/ledger" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "ruff", specifier = ">=0.9.0" },

@@ -26,6 +26,7 @@ ADAPTERS_SRC = REPO_ROOT / "packages" / "adapters" / "src"
 GRAPH_SRC = REPO_ROOT / "packages" / "graph" / "src"
 CAPABILITIES_SRC = REPO_ROOT / "packages" / "capabilities" / "src"
 GATE_SRC = REPO_ROOT / "packages" / "gate" / "src"
+LEDGER_SRC = REPO_ROOT / "packages" / "ledger" / "src"
 FIXTURES = REPO_ROOT / "fixtures"
 
 #: Every MERP product. Nothing in PIL may import any of them, nor AXO's `backend`
@@ -62,7 +63,14 @@ def imported_roots(path: Path) -> set[str]:
 def test_no_pil_module_imports_a_product():
     """Catches dynamic and function-local imports that the ruff rule cannot see."""
     offenders: list[str] = []
-    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC, GRAPH_SRC, CAPABILITIES_SRC, GATE_SRC):
+    for source_root in (
+        CONTRACTS_SRC,
+        ADAPTERS_SRC,
+        GRAPH_SRC,
+        CAPABILITIES_SRC,
+        GATE_SRC,
+        LEDGER_SRC,
+    ):
         for path in python_files(source_root):
             banned = imported_roots(path) & PRODUCT_MODULES
             if banned:
@@ -165,6 +173,41 @@ def test_gate_depends_only_on_capabilities():
     assert names == ["pil-capabilities"]
 
 
+# ----------------------------------------------------------------------------------
+# ledger has zero dependencies (ADR-0014)
+# ----------------------------------------------------------------------------------
+
+
+def test_ledger_declares_no_dependencies():
+    config = tomllib.loads(
+        (REPO_ROOT / "packages" / "ledger" / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert config["project"]["dependencies"] == [], (
+        "pil-ledger must stay dependency-free (ADR-0014): hashlib/hmac are stdlib, "
+        "and a third-party serialiser must not be able to change signed bytes."
+    )
+
+
+def test_ledger_imports_nothing_from_this_repo_or_outside_the_stdlib():
+    allowed = {"pil_ledger", "__future__"}
+    stdlib = {
+        "abc",
+        "collections",
+        "dataclasses",
+        "datetime",
+        "enum",
+        "hashlib",
+        "hmac",
+        "json",
+        "typing",
+    }
+    offenders: list[str] = []
+    for path in python_files(LEDGER_SRC):
+        for module in imported_roots(path) - allowed - stdlib:
+            offenders.append(f"{path.relative_to(REPO_ROOT)} imports {module!r}")
+    assert not offenders, "\n".join(offenders)
+
+
 def test_gate_imports_only_capabilities_and_the_stdlib():
     allowed = {"pil_gate", "pil_capabilities", "__future__"}
     stdlib = {
@@ -192,7 +235,14 @@ def test_nothing_in_pil_imports_a_web_framework_or_a_socket():
     """No HTTP surface, no server, no long-running process."""
     forbidden = {"fastapi", "flask", "django", "starlette", "uvicorn", "socket", "socketserver"}
     offenders: list[str] = []
-    for source_root in (CONTRACTS_SRC, ADAPTERS_SRC, GRAPH_SRC, CAPABILITIES_SRC, GATE_SRC):
+    for source_root in (
+        CONTRACTS_SRC,
+        ADAPTERS_SRC,
+        GRAPH_SRC,
+        CAPABILITIES_SRC,
+        GATE_SRC,
+        LEDGER_SRC,
+    ):
         for path in python_files(source_root):
             found = imported_roots(path) & forbidden
             if found:

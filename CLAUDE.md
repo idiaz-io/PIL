@@ -65,14 +65,14 @@ PIL specifically (§4).
 | 1 | **Shared shapes** | **Real.** Envelope, versioning, canonical serialisation, redaction, tenancy resolution. Zero dependencies, Python stdlib only. | `packages/contracts` |
 | 2 | **Adapter framework** | **Partial, translate-only.** Six translators ported and tested (`sciencelogic`, `sl1`, `connectwise`, `fleet`, `addigy`, `legacy`). `connect`, `execute_on_device`, `check_connectivity`, `fetch_device_details`, `verify_*` are explicitly deferred (ADR-0005) — nothing in this repo opens a socket. | `packages/adapters` |
 | 3 | **Policy gate** | **Real (reference implementation; no `safe-auto-heal`, no ledger write).** Interface + `ReferenceGate` + `StaticGate` test double. Decisions are `allow` / `hold` / `deny` with the console's four tiers; `decide()` is pure. | `packages/gate`, ADR-0013 |
-| 4 | **Sealed ledger** | **Absent.** Same story — `merp-console` has a real HMAC-chained, append-only ledger in SQL, PIL has none. | — |
+| 4 | **Sealed ledger** | **Real (HMAC-SHA256 interim; no store, no KMS).** Interface + `HmacSealer` + `MemoryLedger` + `StaticLedger`. `seal()` is pure; the product persists. | `packages/ledger`, ADR-0014 |
 | 5 | **Graph access path** | **Absent.** No ITKG code, no tenant-scoped query library, nothing. | — |
 | 6 | **Bus + orchestrator** | **Cut, not merely unstarted — a real distinction.** IDI-195 D4 killed the bus and the capability catalogue deliberately: zero consumers, AXO already has its own queue, and a naming convention does what a catalogue would at two products. Four docs that presented the bus as settled architecture were rewritten so none of them do. What replaces it for Phase A is `pil_adapters.Sink` — one method, `emit(envelope)`, three implementations (`NullSink`, `CollectingSink`, `RedactingSink`) — an in-process handoff a translator's caller uses, that a translator itself never imports. | `packages/adapters/src/pil_adapters/sink.py`, ADR-0009 |
 
-**"Cut" vs. "absent" is a real distinction, worth keeping straight.** Gate, ledger and graph
-are absent because nobody has started them — they may still be built roughly as drawn. The
-bus is absent because it was actively decided against, with reasons, and rebuilding it
-requires overturning that decision (a new ADR), not just getting around to it.
+**"Cut" vs. "absent" is a real distinction, worth keeping straight.** Gate and ledger now
+have reference implementations. Graph has a query builder and driver interface (no live
+driver). The bus is absent because it was actively decided against, with reasons, and
+rebuilding it requires overturning that decision (a new ADR), not just getting around to it.
 
 **Products that consume PIL:** AXO, QUILL, Vigil, Otto, Guardrails, Pavo, Remi — seven, per
 the architecture diagram and `merp-console`'s pricing page. Only AXO exists and is live.

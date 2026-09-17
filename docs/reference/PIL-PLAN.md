@@ -23,7 +23,7 @@ part of that claim (cut, and not PIL's to own).
 | Adapter framework (finish) | Real `ConnectionProvider` + Fleet's connect/fetch/execute, ported from AXO. | Hiba | Thu–Fri | **Conditional.** Ships this week only if the credential-scoping memo is approved by end of Wednesday. Drops out of the week, explicitly, otherwise — see Thursday/Friday fallback. |
 | Fixture corpus + test suite | Real (where reachable) or labeled-synthetic payloads per source, scrubbed, plus the known harness bug fixed. | Shabbar | Mon–Wed | **Ships this week.** |
 | Policy gate | Answers: may this act run — allow / hold / deny. Interface **and** a real implementation **and** tests. | Shabbar | Thu | **Shipped.** Reference implementation; no `safe-auto-heal`, no ledger write. |
-| Sealed ledger | Signed, hash-chained, offline-verifiable evidence. Interface **and** a real implementation **and** tests. | Shabbar | Fri | **Ships this week.** |
+| Sealed ledger | Signed, hash-chained, offline-verifiable evidence. Interface **and** a real implementation **and** tests. | Shabbar | Fri | **Shipped.** HMAC-SHA256 interim; no store, no KMS. |
 | Bus + orchestrator | How work would move between products and roll back. | *None* | *None* | **Cut** (ADR-0009) — zero consumers, AXO has its own queue. Reviving it needs a new ADR overturning that one, not a day on this week's schedule. |
 | Gateway | One door for auth/authz/tenancy-scoping/rate-limiting/audit, per the architecture diagram. | *None* | *None* | **Blocked**, structurally — I-1 means it can't be PIL's regardless of who owns it. `[NEEDS-DECISION: gateway-ownership]` — not this week's to resolve. |
 
@@ -184,8 +184,8 @@ signer/verifier, not just the shape — sign an entry, chain it, verify
 tampering breaks the chain — plus a test double for consumers that only
 need to assert against *something* emitting ledger-shaped entries.
 
-**Exit:** the interface, a working reference implementation, and a passing
-test suite. One day.
+**Exit:** shipped — `HmacSealer`, `MemoryLedger`, `StaticLedger`, passing tests.
+HMAC-SHA256 interim; no store, no KMS, no console/AXO wiring.
 
 ---
 

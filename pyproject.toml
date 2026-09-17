@@ -14,6 +14,7 @@ pil-adapters = { workspace = true }
 pil-graph = { workspace = true }
 pil-capabilities = { workspace = true }
 pil-gate = { workspace = true }
+pil-ledger = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -22,6 +23,7 @@ dev = [
     "pil-graph",
     "pil-capabilities",
     "pil-gate",
+    "pil-ledger",
     "pytest>=8.3.4",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.9.0",
@@ -36,7 +38,7 @@ dev = [
 # here so PIL's tests do not have to.
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["packages/contracts/tests", "packages/adapters/tests", "packages/graph/tests", "packages/capabilities/tests", "packages/gate/tests", "tests"]
+testpaths = ["packages/contracts/tests", "packages/adapters/tests", "packages/graph/tests", "packages/capabilities/tests", "packages/gate/tests", "packages/ledger/tests", "tests"]
 addopts = "-q --strict-markers --import-mode=importlib"
 markers = [
     "parity: compares PIL output against AXO's, requires an AXO checkout",
@@ -48,7 +50,7 @@ markers = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/capabilities/src", "packages/gate/src", "scripts"]
+src = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/capabilities/src", "packages/gate/src", "packages/ledger/src", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PT", "SIM", "TID", "RUF"]
@@ -86,7 +88,7 @@ ban-relative-imports = "all"
 "packages/*/tests/*" = ["TID251"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pil_contracts", "pil_adapters", "pil_graph", "pil_capabilities", "pil_gate"]
+known-first-party = ["pil_contracts", "pil_adapters", "pil_graph", "pil_capabilities", "pil_gate", "pil_ledger"]
 
 # ----------------------------------------------------------------------------------
 # Type checking
@@ -95,4 +97,4 @@ known-first-party = ["pil_contracts", "pil_adapters", "pil_graph", "pil_capabili
 python_version = "3.12"
 strict = true
 warn_unreachable = true
-files = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/capabilities/src", "packages/gate/src"]
+files = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/capabilities/src", "packages/gate/src", "packages/ledger/src"]

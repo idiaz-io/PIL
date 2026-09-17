@@ -72,7 +72,7 @@ fixture-corpus work in `PIL-PLAN.md`.)
 | Shared shapes | Exists |
 | Adapter framework | Partial — translate only, no connect/fetch |
 | Policy gate | **Real (reference implementation; no `safe-auto-heal`, no ledger write)** |
-| Sealed ledger | Absent from PIL (a working version exists in the console's Postgres) |
+| Sealed ledger | **Real (HMAC-SHA256 interim; no store, no KMS)** |
 | Graph access path | Absent — no ITKG code at all |
 | Bus + orchestrator | **Cut, not merely absent** (IDI-195 D4) — zero consumers, AXO already has its own queue, a naming convention does what a catalogue would at two products. Replaced by `pil_adapters.Sink`. Reviving it means overturning ADR-0009, not just getting to it. |
 | *API Gateway* (in the diagram, outside PIL) | Absent everywhere |
