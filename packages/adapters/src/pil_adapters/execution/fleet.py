@@ -22,13 +22,16 @@ itself, not a client library it depends on).
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from pil_adapters.execution.shapes import ConnectivityResult, DeviceProfile
+from pil_adapters.execution.shapes import ConnectivityResult, DeviceProfile, ExecutionResult
 
 __all__ = ["FleetExecutor"]
 
@@ -40,6 +43,28 @@ _OFFLINE_AFTER_SECONDS = 24 * 3600
 
 #: Fleet's `platform` field to PIL's `os_type`. Port of `fleet_healing_adapter.py:195`.
 _PLATFORM_TO_OS_TYPE = {"darwin": "macos", "linux": "linux", "windows": "windows"}
+
+#: Seconds between polls of `GET /scripts/results/{id}`, and the total budget for polling
+#: before giving up. Port of `ASYNC_POLL_INTERVAL`/`ASYNC_POLL_TIMEOUT`.
+_ASYNC_POLL_INTERVAL_SECONDS = 5
+_ASYNC_POLL_TIMEOUT_SECONDS = 180
+
+SleepFn = Callable[[float], Awaitable[None]]
+MonotonicFn = Callable[[], float]
+
+
+def _inject_params(script: str, params: Mapping[str, str], language: str) -> str:
+    """Prepend parameter assignments to the script body. Port of `_inject_params`."""
+    if not params:
+        return script
+    lang = language.lower()
+    if lang in ("bash", "sh", "shell"):
+        lines = [f'export {key}="{value}"' for key, value in params.items()]
+        return "\n".join(lines) + "\n" + script
+    if lang in ("powershell", "ps1"):
+        lines = [f'${key} = "{value}"' for key, value in params.items()]
+        return "\n".join(lines) + "\n" + script
+    return script
 
 
 class FleetExecutor:
@@ -57,6 +82,8 @@ class FleetExecutor:
         token: str,
         *,
         transport: httpx.AsyncBaseTransport | None = None,
+        sleep: SleepFn | None = None,
+        monotonic: MonotonicFn | None = None,
     ) -> None:
         if not endpoint or not endpoint.strip():
             raise ValueError("FleetExecutor.endpoint is required")
@@ -65,6 +92,12 @@ class FleetExecutor:
         self._endpoint = endpoint.rstrip("/")
         self._token = token
         self._transport = transport
+        # Time is a parameter here for the same reason a translator's clock is
+        # (pil_adapters.clock): a 90-second retry-and-poll budget cannot be exercised by a
+        # test that actually waits 90 seconds. Production leaves both at their real
+        # defaults; tests inject a no-op sleep and a monotonic stub that advances on demand.
+        self._sleep: SleepFn = sleep if sleep is not None else asyncio.sleep
+        self._monotonic: MonotonicFn = monotonic if monotonic is not None else time.monotonic
 
     @property
     def endpoint(self) -> str:
@@ -94,6 +127,9 @@ class FleetExecutor:
         return httpx.AsyncClient(
             transport=self._transport, timeout=timeout, verify=self._verify_tls
         )
+
+    def _elapsed_ms(self, start: float) -> int:
+        return int((self._monotonic() - start) * 1000)
 
     # ------------------------------------------------------------------
     # Connectivity
@@ -265,6 +301,206 @@ class FleetExecutor:
         except Exception as exc:
             logger.warning("FleetExecutor.fetch_device_details(%s) failed: %s", device_id, exc)
             return _stub_profile(device_id, uuid)
+
+    # ------------------------------------------------------------------
+    # Script execution
+    # ------------------------------------------------------------------
+
+    async def execute_on_device(
+        self,
+        device_id: str,
+        script: str,
+        params: Mapping[str, str] | None = None,
+        language: str = "bash",
+    ) -> ExecutionResult:
+        """Run a script on a Fleet device. Port of `fleet_healing_adapter.py:331-382`.
+
+        Only the live path: resolve the Fleet host ID from ``device_id``'s UUID, submit
+        the script for async execution (``POST /scripts/run``), then poll for its result
+        (``GET /scripts/results/{id}``). AXO's synchronous ``/scripts/run/sync`` branch,
+        its 409-Conflict retry, and the exception handling wrapping both are unreachable
+        dead code in the original -- recorded in ``docs/known-differences.md`` -- and are
+        not ported.
+
+        AXO has no ``Tool`` registry here: ``script`` is the fully-resolved script body,
+        and ``params``/``language`` drive the same env-var injection AXO's ``Tool`` object
+        would have carried. A ``Tool`` with its params schema, preconditions and rollback
+        is a product concept (PIL has no tool registry) -- this method only needs the
+        rendered text to run.
+
+        Retries up to 3 times when submitting or polling raises a transient network error
+        (a failed connection, a connection timeout, or a dropped connection mid-response),
+        waiting ``30 * attempt`` seconds between attempts. One deliberate behaviour change
+        from AXO here: AXO's ``_run_async`` catches *every* exception -- including these
+        three -- into a failed ``ExecutionResult``, which means its own retry loop can
+        never actually observe one and never fires (recorded in
+        ``docs/known-differences.md``). This port lets those three types propagate out of
+        ``_run_script`` instead, so the retry-with-backoff the code was evidently written
+        to support actually runs. Every other exception is still caught inside
+        ``_run_script`` and turned into a failed result, exactly as AXO does -- and a
+        transient error that survives all 3 attempts propagates to the caller rather than
+        becoming a failed result, matching AXO's ``raise last_error``.
+        """
+        start = self._monotonic()
+        uuid = device_id.removeprefix("fleet:")
+
+        host_id = await self._resolve_host_id(uuid)
+        if host_id is None:
+            return ExecutionResult(
+                success=False,
+                exit_code=-1,
+                stdout="",
+                stderr=f"Host {uuid} not found in Fleet",
+                duration_ms=self._elapsed_ms(start),
+                adapter="fleet",
+                error="Host not found",
+            )
+
+        rendered = _inject_params(script, params or {}, language)
+
+        last_error: Exception | None = None
+        for attempt in range(3):
+            if attempt > 0:
+                wait = 30 * attempt
+                logger.info(
+                    "Fleet execute retry %d/2 for host %s -- waiting %ds",
+                    attempt,
+                    host_id,
+                    wait,
+                )
+                await self._sleep(wait)
+            try:
+                return await self._run_script(host_id, rendered, start)
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError) as exc:
+                last_error = exc
+                logger.warning("Fleet execute transient error (attempt %d/3): %s", attempt + 1, exc)
+                continue
+
+        assert last_error is not None  # the loop above always returns or sets this
+        raise last_error
+
+    async def _resolve_host_id(self, uuid: str) -> int | None:
+        """Resolve a Fleet host UUID to its numeric ID. Port of `_get_fleet_host_id`.
+
+        Tries the exact-match ``/hosts/identifier/{uuid}`` endpoint first (deterministic),
+        then falls back to the fuzzy ``/hosts?query={uuid}`` lookup. Unlike
+        :meth:`_run_script`, any failure here -- including a transient network error --
+        is swallowed and reported as "not found", matching AXO's own helper exactly: only
+        script submission and polling get retried, not host resolution.
+        """
+        try:
+            async with self._client(timeout=10) as client:
+                identifier_resp = await client.get(
+                    f"{self._endpoint}/api/latest/fleet/hosts/identifier/{uuid}",
+                    headers=self._headers(),
+                )
+                if identifier_resp.status_code == 200:
+                    host = (identifier_resp.json() or {}).get("host")
+                    if host and host.get("id") is not None:
+                        return int(host["id"])
+
+                query_resp = await client.get(
+                    f"{self._endpoint}/api/latest/fleet/hosts",
+                    params={"query": uuid, "per_page": 1},
+                    headers=self._headers(),
+                )
+                if query_resp.status_code == 200:
+                    hosts = (query_resp.json() or {}).get("hosts") or []
+                    if hosts:
+                        return int(hosts[0]["id"])
+        except Exception as exc:
+            logger.error("FleetExecutor._resolve_host_id(%s) failed: %s", uuid, exc)
+        return None
+
+    async def _run_script(self, host_id: int, script: str, start: float) -> ExecutionResult:
+        """Submit a script for async execution and poll for its result.
+
+        Port of `_run_async` (`fleet_healing_adapter.py:651-716`). See
+        :meth:`execute_on_device`'s docstring for the one deliberate divergence: the three
+        transient exception types its retry loop catches propagate from here instead of
+        being swallowed.
+        """
+        try:
+            async with self._client(timeout=30) as client:
+                submit_resp = await client.post(
+                    f"{self._endpoint}/api/latest/fleet/scripts/run",
+                    json={"host_id": host_id, "script_contents": script},
+                    headers=self._headers(),
+                )
+                submit_resp.raise_for_status()
+                submitted = submit_resp.json()
+                # Fleet uses different field names across versions.
+                exec_id = (
+                    submitted.get("script_execution_id")
+                    or submitted.get("execution_id")
+                    or submitted.get("id")
+                )
+                if not exec_id:
+                    logger.error(
+                        "Fleet async: unexpected response (no execution_id): %s",
+                        str(submitted)[:300],
+                    )
+                    return ExecutionResult(
+                        success=False,
+                        exit_code=-1,
+                        stdout="",
+                        stderr=f"Fleet returned no execution_id. Response: {str(submitted)[:200]}",
+                        duration_ms=self._elapsed_ms(start),
+                        adapter="fleet",
+                    )
+
+                deadline = self._monotonic() + _ASYNC_POLL_TIMEOUT_SECONDS
+                while self._monotonic() < deadline:
+                    await self._sleep(_ASYNC_POLL_INTERVAL_SECONDS)
+                    poll_resp = await client.get(
+                        f"{self._endpoint}/api/latest/fleet/scripts/results/{exec_id}",
+                        headers=self._headers(),
+                    )
+                    if poll_resp.status_code == 200:
+                        data = poll_resp.json()
+                        exit_code = data.get("exit_code")
+                        if exit_code is not None:
+                            return ExecutionResult(
+                                success=int(exit_code) == 0,
+                                exit_code=int(exit_code),
+                                stdout=data.get("output") or "",
+                                stderr=data.get("stderr") or "",
+                                duration_ms=self._elapsed_ms(start),
+                                adapter="fleet",
+                            )
+                        if data.get("host_timeout"):
+                            return ExecutionResult(
+                                success=False,
+                                exit_code=-1,
+                                stdout="",
+                                stderr="Fleet host timed out waiting for script result",
+                                duration_ms=self._elapsed_ms(start),
+                                adapter="fleet",
+                            )
+
+                return ExecutionResult(
+                    success=False,
+                    exit_code=-1,
+                    stdout="",
+                    stderr=(
+                        f"Timed out polling Fleet script result after "
+                        f"{_ASYNC_POLL_TIMEOUT_SECONDS}s"
+                    ),
+                    duration_ms=self._elapsed_ms(start),
+                    adapter="fleet",
+                )
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError):
+            raise
+        except Exception as exc:
+            return ExecutionResult(
+                success=False,
+                exit_code=-1,
+                stdout="",
+                stderr=str(exc),
+                duration_ms=self._elapsed_ms(start),
+                adapter="fleet",
+                error=str(exc),
+            )
 
 
 def _stub_profile(device_id: str, uuid: str) -> DeviceProfile:

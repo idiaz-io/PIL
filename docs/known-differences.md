@@ -64,3 +64,20 @@ This doesn't interact with the parity harness — `make parity` compares `transl
 output (alert → `Envelope`), and `execute_on_device` isn't a translation path. Recorded here
 for the same audit-trail reason as the other two sections: report it, don't let it be
 discovered later by someone diffing line counts.
+
+---
+
+## Fixed during the port, not preserved
+
+Neither an intentional difference (no ADR chose this) nor a preserved defect (the behaviour
+is not reproduced) — a third case the two-category framing above doesn't have room for.
+`execute_on_device` isn't a translation path, so nothing here is governed by the parity
+harness's byte-for-byte comparison; fixing it does not put "parity verified" at risk the way
+touching a translator would.
+
+| # | Behaviour in AXO | Where in AXO | What PIL does instead |
+|---|---|---|---|
+| 1 | `execute_on_device`'s retry-with-backoff loop catches `httpx.ConnectError`/`ConnectTimeout`/`RemoteProtocolError` raised by `_run_async` — but `_run_async` itself wraps its entire body in `except Exception: return ExecutionResult(...)`, so it never raises. The retry loop's own exception handler is unreachable; the same host outage that was meant to trigger a 30s/60s-backed-off retry instead returns a single failed result on the first attempt. | `backend/integrations/fleet_healing_adapter.py:362-382` (loop), `:712-716` (the swallow) | `pil_adapters.execution.fleet.FleetExecutor._run_script` lets those three exception types propagate instead of catching them, so `execute_on_device`'s retry-with-backoff actually fires. Every other exception is still caught inside `_run_script` and turned into a failed `ExecutionResult`, matching AXO. Decided interactively with Hiba during the Phase 3 port (2026-09-19) rather than by ADR, since it isn't an architectural choice — it's restoring behaviour the code was already written to have. |
+
+Found while porting, not before — worth noting because it means AXO's retry has likely
+never actually fired in production either, on either side of this migration.
