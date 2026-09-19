@@ -1,11 +1,8 @@
 # Credential-scoping decision memo
 
-**Status: Awaiting approval.** Written by Hiba, 2026-09-19. This is not an ADR — it's the
-memo `PIL-PLAN.md`'s Monday entry commits to shipping, submitted for whoever has standing to
-approve it. **Phase 3 adapter work (Fleet's connect/fetch/execute, ported from AXO) does not
-start until this is approved.** If it comes back with named objections rather than silence,
-Thursday/Friday become hardening instead, per the plan's own Wednesday checkpoint language —
-not started on a guess either way.
+**Status: Approved — decided by Hiba, 2026-09-19.** Written by Hiba, 2026-09-19. This is not
+an ADR — it's the memo `PIL-PLAN.md`'s Monday entry commits to shipping. Phase 3 adapter
+work (Fleet's connect/fetch/execute, ported from AXO) is now unblocked.
 
 ## The question
 
@@ -142,6 +139,11 @@ credential store before any product other than AXO exists to need it. The strong
 D3 wanted is not abandoned — it's available per-tenant, as an explicit configuration, the
 moment someone needs it — but nobody gets it by default, and that is a real, named gap
 between what ships and what D3 originally specified, not a detail to gloss over.
+
+**Because the default mode provides no credential-layer product isolation, `packages/gate`
+is now the sole enforcement point for that boundary.** There is no second layer behind it —
+whoever maintains the gate should read ADR-0013 knowing that a gate decision is what stands
+between one product and another's access, not a defense-in-depth backstop to it.
 
 ## What would trigger revisiting this
 
