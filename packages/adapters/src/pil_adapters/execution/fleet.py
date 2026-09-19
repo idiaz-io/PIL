@@ -25,13 +25,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from pil_adapters.execution.shapes import ConnectivityResult, DeviceProfile, ExecutionResult
+from pil_adapters.execution.shapes import (
+    ConnectivityResult,
+    DeviceProfile,
+    ExecutionResult,
+    VerificationResult,
+)
 
 __all__ = ["FleetExecutor"]
 
@@ -501,6 +506,114 @@ class FleetExecutor:
                 adapter="fleet",
                 error=str(exc),
             )
+
+    # ------------------------------------------------------------------
+    # Verification
+    # ------------------------------------------------------------------
+
+    async def verify_alert_cleared(self, alert_id: str, policy_query: str) -> VerificationResult:
+        """Re-check a Fleet policy via a live query to see whether a fix took effect.
+
+        Port of `fleet_healing_adapter.py:474-555`. AXO resolves ``policy_query`` itself,
+        reading it from its own `healing_queue` table by the policy ID parsed out of
+        ``alert_id`` -- a product's database, which PIL must not reach into (I-3).
+        ADR-0015 makes this the caller's job instead: ``policy_query`` arrives already
+        resolved, and this method only runs it.
+
+        ``alert_id``'s trailing segment is an 8-character prefix of the host's Fleet UUID
+        (see the Fleet translator's ``alert_id`` construction), matched against each
+        host's full UUID with ``startswith`` -- ported as-is.
+
+        Any failure -- host not found, a non-200 response, a network error -- returns
+        "inconclusive" rather than raising, matching AXO's own broad catch-and-continue:
+        a delayed verification worker is expected to retry rather than treat this as
+        fatal.
+        """
+        uuid_prefix = alert_id.split("-")[-1] if "-" in alert_id else ""
+
+        try:
+            async with self._client(timeout=30) as client:
+                hosts_resp = await client.get(
+                    f"{self._endpoint}/api/latest/fleet/hosts",
+                    params={"per_page": 50},
+                    headers=self._headers(),
+                )
+                host_id = None
+                if hosts_resp.status_code == 200:
+                    for candidate in hosts_resp.json().get("hosts", []):
+                        if str(candidate.get("uuid", "")).upper().startswith(
+                            uuid_prefix.upper()
+                        ):
+                            host_id = candidate.get("id")
+                            break
+
+                if host_id is None:
+                    return VerificationResult(verdict="inconclusive", level1_cleared=None)
+
+                query_resp = await client.post(
+                    f"{self._endpoint}/api/latest/fleet/queries/run",
+                    json={"query": policy_query, "host_ids": [host_id]},
+                    headers=self._headers(),
+                    timeout=25,
+                )
+                if query_resp.status_code != 200:
+                    return VerificationResult(verdict="inconclusive", level1_cleared=None)
+
+                results = query_resp.json().get("results", [])
+                passed = any(len(entry.get("rows", [])) > 0 for entry in results)
+                if passed:
+                    logger.info("Fleet live query verification: PASS (alert_id=%s)", alert_id)
+                    return VerificationResult(verdict="pass", level1_cleared=True)
+
+                logger.info("Fleet live query verification: FAIL (alert_id=%s)", alert_id)
+                return VerificationResult(
+                    verdict="fail",
+                    level1_cleared=False,
+                    error="Live policy query returned 0 rows -- fix did not take effect.",
+                )
+        except Exception as exc:
+            logger.debug("Fleet live query verification error: %s", exc)
+            return VerificationResult(verdict="inconclusive", level1_cleared=None)
+
+    async def verify_device_state(
+        self, device_id: str, checks: Sequence[Mapping[str, Any]]
+    ) -> VerificationResult:
+        """Run device-level verification checks via Fleet script execution.
+
+        Port of `fleet_healing_adapter.py:557-599`. Each check with a ``command`` is run
+        through :meth:`execute_on_device` and its stripped stdout compared against
+        ``expected``; a check with no ``expected`` value instead passes on a zero exit
+        code. AXO always runs these inline checks as ``language="bash"`` regardless of
+        the device's actual platform or the tool that produced the check -- preserved
+        here as ``execute_on_device``'s own default language.
+        """
+        if not checks:
+            return VerificationResult(verdict="pass", level2_passed=True, checks=())
+
+        results: list[Mapping[str, Any]] = []
+        all_passed = True
+
+        for check in checks:
+            command = str(check.get("command") or "")
+            if not command:
+                continue
+            expected = check.get("expected")
+            name = check.get("name") or (command[:30] if command else "check")
+
+            exec_result = await self.execute_on_device(device_id, command)
+            actual = exec_result.stdout.strip()
+            passed = (
+                actual == str(expected) if expected is not None else exec_result.exit_code == 0
+            )
+            results.append({"name": name, "expected": expected, "actual": actual, "pass": passed})
+            if not passed:
+                all_passed = False
+
+        return VerificationResult(
+            verdict="pass" if all_passed else "fail",
+            level2_passed=all_passed,
+            checks=tuple(results),
+        )
 
 
 def _stub_profile(device_id: str, uuid: str) -> DeviceProfile:

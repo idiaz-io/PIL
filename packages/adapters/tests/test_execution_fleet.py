@@ -450,3 +450,163 @@ async def test_execute_on_device_non_transient_error_fails_without_retry():
     assert result.success is False
     assert result.error == "unexpected failure"
     assert clock.sleeps == []
+
+
+# ----------------------------------------------------------------------------------
+# verify_alert_cleared
+# ----------------------------------------------------------------------------------
+
+
+def alert_id_for(uuid: str) -> str:
+    return f"fleet-policy-21-{uuid[:8]}"
+
+
+async def test_verify_alert_cleared_pass_when_query_returns_rows():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts":
+            return httpx.Response(200, json={"hosts": [{"id": 5, "uuid": "ACC13DA0-full"}]})
+        assert request.url.path == "/api/latest/fleet/queries/run"
+        return httpx.Response(200, json={"results": [{"rows": [{"col": "value"}]}]})
+
+    result = await executor(httpx.MockTransport(handler)).verify_alert_cleared(
+        alert_id_for("ACC13DA0"), "SELECT 1"
+    )
+
+    assert result.verdict == "pass"
+    assert result.level1_cleared is True
+
+
+async def test_verify_alert_cleared_fail_when_query_returns_no_rows():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts":
+            return httpx.Response(200, json={"hosts": [{"id": 5, "uuid": "ACC13DA0-full"}]})
+        return httpx.Response(200, json={"results": [{"rows": []}]})
+
+    result = await executor(httpx.MockTransport(handler)).verify_alert_cleared(
+        alert_id_for("ACC13DA0"), "SELECT 1"
+    )
+
+    assert result.verdict == "fail"
+    assert result.level1_cleared is False
+    assert "did not take effect" in result.error
+
+
+async def test_verify_alert_cleared_inconclusive_when_host_not_found():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"hosts": [{"id": 5, "uuid": "OTHERUUID-full"}]})
+
+    result = await executor(httpx.MockTransport(handler)).verify_alert_cleared(
+        alert_id_for("ACC13DA0"), "SELECT 1"
+    )
+
+    assert result.verdict == "inconclusive"
+    assert result.level1_cleared is None
+
+
+async def test_verify_alert_cleared_inconclusive_on_query_failure():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts":
+            return httpx.Response(200, json={"hosts": [{"id": 5, "uuid": "ACC13DA0-full"}]})
+        return httpx.Response(500)
+
+    result = await executor(httpx.MockTransport(handler)).verify_alert_cleared(
+        alert_id_for("ACC13DA0"), "SELECT 1"
+    )
+
+    assert result.verdict == "inconclusive"
+
+
+async def test_verify_alert_cleared_inconclusive_on_transport_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom", request=request)
+
+    result = await executor(httpx.MockTransport(handler)).verify_alert_cleared(
+        alert_id_for("ACC13DA0"), "SELECT 1"
+    )
+
+    assert result.verdict == "inconclusive"
+
+
+# ----------------------------------------------------------------------------------
+# verify_device_state
+# ----------------------------------------------------------------------------------
+
+
+async def test_verify_device_state_no_checks_passes_trivially():
+    result = await executor(httpx.MockTransport(lambda r: httpx.Response(500))).verify_device_state(
+        "fleet:abc", []
+    )
+
+    assert result.verdict == "pass"
+    assert result.level2_passed is True
+    assert result.checks == ()
+
+
+async def test_verify_device_state_compares_actual_to_expected():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts/identifier/abc":
+            return httpx.Response(200, json={"host": {"id": 5}})
+        if request.url.path == "/api/latest/fleet/scripts/run":
+            return httpx.Response(200, json={"execution_id": "exec-1"})
+        return httpx.Response(200, json={"exit_code": 0, "output": "1"})
+
+    result = await executor_with_clock(
+        httpx.MockTransport(handler), FakeClock()
+    ).verify_device_state(
+        "fleet:abc", [{"name": "disk free", "command": "check_disk", "expected": "1"}]
+    )
+
+    assert result.verdict == "pass"
+    assert result.level2_passed is True
+    assert result.checks[0]["actual"] == "1"
+    assert result.checks[0]["pass"] is True
+
+
+async def test_verify_device_state_no_expected_uses_exit_code():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts/identifier/abc":
+            return httpx.Response(200, json={"host": {"id": 5}})
+        if request.url.path == "/api/latest/fleet/scripts/run":
+            return httpx.Response(200, json={"execution_id": "exec-1"})
+        return httpx.Response(200, json={"exit_code": 1, "output": ""})
+
+    result = await executor_with_clock(
+        httpx.MockTransport(handler), FakeClock()
+    ).verify_device_state("fleet:abc", [{"command": "check_thing"}])
+
+    assert result.verdict == "fail"
+    assert result.level2_passed is False
+    assert result.checks[0]["pass"] is False
+
+
+async def test_verify_device_state_skips_checks_without_a_command():
+    result = await executor(httpx.MockTransport(lambda r: httpx.Response(500))).verify_device_state(
+        "fleet:abc", [{"name": "no command here"}]
+    )
+
+    assert result.verdict == "pass"
+    assert result.checks == ()
+
+
+async def test_verify_device_state_all_must_pass():
+    calls = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts/identifier/abc":
+            return httpx.Response(200, json={"host": {"id": 5}})
+        if request.url.path == "/api/latest/fleet/scripts/run":
+            calls["count"] += 1
+            return httpx.Response(200, json={"execution_id": f"exec-{calls['count']}"})
+        exit_code = 0 if calls["count"] == 1 else 1
+        return httpx.Response(200, json={"exit_code": exit_code, "output": ""})
+
+    result = await executor_with_clock(
+        httpx.MockTransport(handler), FakeClock()
+    ).verify_device_state(
+        "fleet:abc",
+        [{"command": "check_one"}, {"command": "check_two"}],
+    )
+
+    assert result.verdict == "fail"
+    assert result.level2_passed is False
+    assert len(result.checks) == 2
