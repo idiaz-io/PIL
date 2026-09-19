@@ -28,7 +28,7 @@ from typing import Any
 
 import httpx
 
-from pil_adapters.execution.shapes import ConnectivityResult
+from pil_adapters.execution.shapes import ConnectivityResult, DeviceProfile
 
 __all__ = ["FleetExecutor"]
 
@@ -37,6 +37,9 @@ logger = logging.getLogger(__name__)
 #: A host not seen within this window is treated as offline. Port of
 #: `fleet_healing_adapter.py:308`'s inline ``24 * 3600``.
 _OFFLINE_AFTER_SECONDS = 24 * 3600
+
+#: Fleet's `platform` field to PIL's `os_type`. Port of `fleet_healing_adapter.py:195`.
+_PLATFORM_TO_OS_TYPE = {"darwin": "macos", "linux": "linux", "windows": "windows"}
 
 
 class FleetExecutor:
@@ -196,3 +199,85 @@ class FleetExecutor:
             endpoint=f"{self._endpoint}/hosts/{host.get('id', '')}",
             error=error,
         )
+
+    # ------------------------------------------------------------------
+    # Device details
+    # ------------------------------------------------------------------
+
+    async def fetch_device_details(self, device_id: str) -> DeviceProfile:
+        """Fetch a device profile from Fleet by UUID.
+
+        Port of `fleet_healing_adapter.py:158-219`. Any failure -- host not found,
+        network error, malformed response -- falls back to :func:`_stub_profile` rather
+        than raising, matching AXO's own behaviour: a device that cannot be enriched still
+        needs a profile object downstream, just an uninformative one.
+        """
+        uuid = device_id.removeprefix("fleet:")
+        try:
+            async with self._client(timeout=15) as client:
+                search_resp = await client.get(
+                    f"{self._endpoint}/api/latest/fleet/hosts",
+                    params={"query": uuid, "per_page": 1},
+                    headers=self._headers(),
+                )
+                search_resp.raise_for_status()
+                hosts = search_resp.json().get("hosts", [])
+
+                if not hosts:
+                    return _stub_profile(device_id, uuid)
+
+                host: dict[str, Any] = hosts[0]
+                fleet_id = host.get("id")
+
+                if fleet_id:
+                    detail_resp = await client.get(
+                        f"{self._endpoint}/api/latest/fleet/hosts/{fleet_id}",
+                        headers=self._headers(),
+                    )
+                    if detail_resp.status_code == 200:
+                        detail_json = detail_resp.json()
+                        detail = detail_json.get("host", detail_json)
+                        host = {**host, **detail}
+
+            platform = str(host.get("platform") or "").lower()
+            os_type = _PLATFORM_TO_OS_TYPE.get(platform, "unknown")
+
+            # Fleet labels can be a list of dicts {"name": ..., ...} or plain strings.
+            raw_labels = host.get("labels") or []
+            tags = tuple(
+                (label["name"] if isinstance(label, dict) else str(label))
+                for label in raw_labels
+                if label
+            )
+
+            return DeviceProfile(
+                device_id=device_id,
+                hostname=host.get("hostname") or host.get("computer_name") or uuid,
+                platform="fleet",
+                os_type=os_type,
+                os_name=host.get("os_version") or "unknown",
+                ip_address=host.get("primary_ip"),
+                tags=tags,
+                auto_heal_enabled=False,
+                business_criticality="standard",
+                client_id=host.get("team_name") or "unknown",
+            )
+        except Exception as exc:
+            logger.warning("FleetExecutor.fetch_device_details(%s) failed: %s", device_id, exc)
+            return _stub_profile(device_id, uuid)
+
+
+def _stub_profile(device_id: str, uuid: str) -> DeviceProfile:
+    """The fallback profile AXO returns when Fleet has nothing to say about a device.
+
+    Port of `fleet_healing_adapter.py:755-764`.
+    """
+    return DeviceProfile(
+        device_id=device_id,
+        hostname=uuid,
+        platform="fleet",
+        os_type="unknown",
+        os_name="unknown",
+        auto_heal_enabled=False,
+        business_criticality="standard",
+    )

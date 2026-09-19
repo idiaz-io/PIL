@@ -147,3 +147,104 @@ async def test_check_connectivity_missing_seen_time_defaults_reachable():
 
     assert result.reachable is True
     assert result.error is None
+
+
+# ----------------------------------------------------------------------------------
+# fetch_device_details
+# ----------------------------------------------------------------------------------
+
+
+async def test_fetch_device_details_merges_search_and_detail():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts":
+            return httpx.Response(
+                200,
+                json={"hosts": [{"id": 42, "hostname": "web-01", "platform": "darwin"}]},
+            )
+        assert request.url.path == "/api/latest/fleet/hosts/42"
+        return httpx.Response(
+            200,
+            json={
+                "host": {
+                    "id": 42,
+                    "hostname": "web-01",
+                    "platform": "darwin",
+                    "os_version": "macOS 14.5",
+                    "primary_ip": "10.0.0.5",
+                    "team_name": "infra",
+                    "labels": [{"name": "prod"}, "canary"],
+                }
+            },
+        )
+
+    profile = await executor(httpx.MockTransport(handler)).fetch_device_details(
+        "fleet:abc-123"
+    )
+
+    assert profile.device_id == "fleet:abc-123"
+    assert profile.hostname == "web-01"
+    assert profile.platform == "fleet"
+    assert profile.os_type == "macos"
+    assert profile.os_name == "macOS 14.5"
+    assert profile.ip_address == "10.0.0.5"
+    assert profile.tags == ("prod", "canary")
+    assert profile.auto_heal_enabled is False
+    assert profile.business_criticality == "standard"
+    assert profile.client_id == "infra"
+
+
+async def test_fetch_device_details_unknown_platform_maps_to_unknown_os_type():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts":
+            return httpx.Response(200, json={"hosts": [{"id": 1, "platform": "freebsd"}]})
+        return httpx.Response(200, json={"host": {"id": 1, "platform": "freebsd"}})
+
+    profile = await executor(httpx.MockTransport(handler)).fetch_device_details("fleet:x")
+
+    assert profile.os_type == "unknown"
+
+
+async def test_fetch_device_details_stub_when_host_not_found():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"hosts": []})
+
+    profile = await executor(httpx.MockTransport(handler)).fetch_device_details(
+        "fleet:missing"
+    )
+
+    assert profile.hostname == "missing"
+    assert profile.os_type == "unknown"
+    assert profile.client_id == ""
+
+
+async def test_fetch_device_details_stub_on_transport_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom", request=request)
+
+    profile = await executor(httpx.MockTransport(handler)).fetch_device_details("fleet:x")
+
+    assert profile.hostname == "x"
+    assert profile.os_type == "unknown"
+
+
+async def test_fetch_device_details_stub_when_search_errors_http_status():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    profile = await executor(httpx.MockTransport(handler)).fetch_device_details("fleet:x")
+
+    assert profile.hostname == "x"
+
+
+async def test_fetch_device_details_falls_back_to_search_result_when_detail_fetch_fails():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/latest/fleet/hosts":
+            return httpx.Response(
+                200, json={"hosts": [{"id": 5, "hostname": "search-only", "platform": "linux"}]}
+            )
+        return httpx.Response(404)
+
+    profile = await executor(httpx.MockTransport(handler)).fetch_device_details("fleet:y")
+
+    assert profile.hostname == "search-only"
+    assert profile.os_type == "linux"
