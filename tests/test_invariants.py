@@ -126,12 +126,14 @@ def test_contracts_imports_nothing_from_this_repo_or_outside_the_stdlib():
     assert not offenders, "\n".join(offenders)
 
 
-def test_adapters_depends_only_on_contracts_and_capabilities():
+def test_adapters_depends_only_on_contracts_capabilities_and_httpx():
+    """httpx joined the list in Phase 3 (ADR-0015) -- pil_adapters.execution makes real
+    outbound calls. Pinned here so a future addition is a reviewed change, not a drift."""
     config = tomllib.loads(
         (REPO_ROOT / "packages" / "adapters" / "pyproject.toml").read_text(encoding="utf-8")
     )
     names = [dep.split(">=")[0].split("==")[0].strip() for dep in config["project"]["dependencies"]]
-    assert names == ["pil-contracts", "pil-capabilities"]
+    assert names == ["pil-contracts", "pil-capabilities", "httpx"]
 
 
 # ----------------------------------------------------------------------------------
@@ -248,6 +250,39 @@ def test_nothing_in_pil_imports_a_web_framework_or_a_socket():
             if found:
                 offenders.append(f"{path.relative_to(REPO_ROOT)} imports {sorted(found)}")
     assert not offenders, "I-1: PIL is a library, not a service.\n" + "\n".join(offenders)
+
+
+def test_nothing_in_pil_binds_listens_or_accepts_a_connection():
+    """The structural half of I-1, checked directly rather than by proxy through an import
+    denylist (ADR-0015).
+
+    An outbound HTTP client (``packages/adapters``'s ``httpx`` dependency, ADR-0015) is not
+    a network surface -- PIL as a client acting on a caller's behalf, not PIL as something
+    reachable. What *would* be a surface is PIL binding a socket, listening on one, or
+    accepting a connection on one -- server-shaped constructs no client library exposes.
+    Checked as source text, the same precision level as ``test_portability.py``'s banned-
+    construct scan, not an AST walk: this is a tripwire for someone adding server code, not
+    a claim of exhaustive proof.
+    """
+    forbidden = (".bind(", ".listen(", ".accept(")
+    offenders: list[str] = []
+    for source_root in (
+        CONTRACTS_SRC,
+        ADAPTERS_SRC,
+        GRAPH_SRC,
+        CAPABILITIES_SRC,
+        GATE_SRC,
+        LEDGER_SRC,
+    ):
+        for path in python_files(source_root):
+            text = path.read_text(encoding="utf-8")
+            found = [construct for construct in forbidden if construct in text]
+            if found:
+                offenders.append(f"{path.relative_to(REPO_ROOT)} contains {found}")
+    assert not offenders, (
+        "I-1: PIL is a library, not a service -- no bind/listen/accept anywhere.\n"
+        + "\n".join(offenders)
+    )
 
 
 # ----------------------------------------------------------------------------------
