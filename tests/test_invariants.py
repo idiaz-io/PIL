@@ -126,12 +126,14 @@ def test_contracts_imports_nothing_from_this_repo_or_outside_the_stdlib():
     assert not offenders, "\n".join(offenders)
 
 
-def test_adapters_depends_only_on_contracts_and_capabilities():
+def test_adapters_depends_only_on_contracts_capabilities_and_httpx():
+    """httpx joined the list in Phase 3 (ADR-0015) -- pil_adapters.execution makes real
+    outbound calls. Pinned here so a future addition is a reviewed change, not a drift."""
     config = tomllib.loads(
         (REPO_ROOT / "packages" / "adapters" / "pyproject.toml").read_text(encoding="utf-8")
     )
     names = [dep.split(">=")[0].split("==")[0].strip() for dep in config["project"]["dependencies"]]
-    assert names == ["pil-contracts", "pil-capabilities"]
+    assert names == ["pil-contracts", "pil-capabilities", "httpx"]
 
 
 # ----------------------------------------------------------------------------------

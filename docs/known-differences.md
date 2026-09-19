@@ -47,3 +47,20 @@ Without that, "byte-identical" would not be a claim anyone could make.
 Items 1–3 are three of the eleven tenant-derivation sites found across AXO. The full list
 is in the Phase A findings; fixing them is tracked separately and is explicitly not Phase A
 work.
+
+---
+
+## Dead code, not ported
+
+Not a behavioural difference — nothing here executes in AXO, so there is no behaviour to
+preserve or diverge from. Recorded so a line-count comparison against AXO's source doesn't
+read as a missed port.
+
+| # | Dead code | Where in AXO | Why it's dead |
+|---|---|---|---|
+| 1 | The `/api/latest/fleet/scripts/run/sync` branch of `execute_on_device`, its 409-Conflict retry, and their exception handling | `backend/integrations/fleet_healing_adapter.py:384-454` | Unreachable — the function always returns or raises inside the retry loop at lines 365-382, before control can fall through to this block. AXO's own comment at line 393 says so: "Keep sync path as dead code in case we want to re-enable." `pil_adapters.execution.fleet.FleetExecutor` ports the live path only: resolve host ID, submit async (`POST /scripts/run`), poll (`GET /scripts/results/{id}`), retry up to 3 times on transient network errors with `30 * attempt` backoff. |
+
+This doesn't interact with the parity harness — `make parity` compares `translate()`
+output (alert → `Envelope`), and `execute_on_device` isn't a translation path. Recorded here
+for the same audit-trail reason as the other two sections: report it, don't let it be
+discovered later by someone diffing line counts.

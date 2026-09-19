@@ -7,12 +7,14 @@ requires-python = ">=3.12"
 # Separately versioned and released from contracts (§8 decision 6), so a consumer that
 # needs only the shapes never pulls in the translators.
 #
-# Phase A is translate-only: no HTTP client appears here, because nothing in this
-# package connects to anything. When the connect surface arrives it brings its own
-# dependency and its own ADR.
+# The connect surface arrived (Phase 3, ADR-0015): pil_adapters.execution makes real
+# outbound calls (Fleet's REST API today), which is why httpx is a dependency here and
+# nowhere else -- pil-contracts stays dependency-free (ADR-0006). This is a client, not a
+# server; ADR-0015 is where that distinction against I-1 is made explicit.
 dependencies = [
     "pil-contracts>=0.1.0",
     "pil-capabilities>=0.1.0",
+    "httpx>=0.27.0",
 ]
 
 [build-system]

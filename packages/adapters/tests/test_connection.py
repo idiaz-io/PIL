@@ -267,15 +267,21 @@ def test_connections_must_be_an_array(tmp_path):
 
 
 # ----------------------------------------------------------------------------------
-# Phase A scope
+# Secrets are handles, never values -- permanently, not just for Phase A
 # ----------------------------------------------------------------------------------
 
 
 def test_nothing_here_resolves_a_secret_value():
-    """Phase A translates and nothing more, so no code path needs the value yet.
+    """Not "not yet" -- never, by design (ADR-0015).
 
-    A resolver arriving in this module would mean PIL had grown a connect surface without
-    an ADR, which is on CLAUDE.md's stop-and-ask list.
+    This was originally a Phase A scope marker: no code path needed a secret's value while
+    PIL only translated. Phase 3 added a real execution surface (`pil_adapters.execution`)
+    that genuinely needs a resolved token, and the question came back for real: should PIL
+    resolve `CredentialHandle` itself? ADR-0015 answers no -- same posture as `pil_graph`
+    shipping no live Neo4j driver (ADR-0011): the caller has the secret store's deployment
+    context (a Vault address, a token, ADR-17's still-open hosting answer), and PIL does
+    not. `pil_adapters.execution.fleet.FleetExecutor` takes an already-resolved token from
+    its caller, never a handle. This assertion still holds, and now holds for good.
     """
     from pil_adapters import connection
 
