@@ -17,10 +17,10 @@ part of that claim (cut, and not PIL's to own).
 | Component | What it does, one line | Owner | Days | State |
 |---|---|---|---|---|
 | Shared shapes | The envelope, versioning, redaction, tenancy — the vocabulary everything else builds on. | *None* | *None* | **Frozen this week.** Already real. A change is its own stop-and-agree ADR (Coupling a), never folded into another day's work. |
-| Credential-scoping memo | Compares AXO/PIL/console's three credential models, what each breaks, a recommendation — for a human to approve. | Hiba | Mon | **Ships this week**, unconditionally — writing and submitting it doesn't depend on anything. Its *approval* is what's conditional (see Adapter framework). |
+| Credential-scoping memo | Compares AXO/PIL/console's three credential models, what each breaks, a recommendation — for a human to approve. | Hiba | Mon | **Shipped and Approved** — decided by Hiba, 2026-09-19. `docs/decisions/credential-scoping.md`. |
 | Capability catalogue | The ten capabilities, risk levels, product requirements, adapter mapping — as PIL contract data. | Hiba | Tue | **Ships this week** (PIL side only — `merp-console`'s own switch to consuming it is a separate, cross-repo PR, per ADR-0010). |
 | Graph access path | Tenant-scoped query builder + interface over the closed ITKG vocabulary. No live Neo4j driver. | Hiba | Wed | **Ships this week.** |
-| Adapter framework (finish) | Real `ConnectionProvider` + Fleet's connect/fetch/execute, ported from AXO. | Hiba | Thu–Fri | **Conditional.** Ships this week only if the credential-scoping memo is approved by end of Wednesday. Drops out of the week, explicitly, otherwise — see Thursday/Friday fallback. |
+| Adapter framework (finish) | Real `ConnectionProvider` + Fleet's connect/fetch/execute, ported from AXO. | Hiba | Thu–Fri | **Unblocked, 2026-09-19.** The credential-scoping memo's approval landed after this plan's original Wednesday checkpoint, not by it — the checkpoint's own "No" path (below) was, honestly, what happened first. Adapter work starts now, not on the original schedule. |
 | Fixture corpus + test suite | Real (where reachable) or labeled-synthetic payloads per source, scrubbed, plus the known harness bug fixed. | Shabbar | Mon–Wed | **Ships this week.** |
 | Policy gate | Answers: may this act run — allow / hold / deny. Interface **and** a real implementation **and** tests. | Shabbar | Thu | **Shipped.** Reference implementation; no `safe-auto-heal`, no ledger write. |
 | Sealed ledger | Signed, hash-chained, offline-verifiable evidence. Interface **and** a real implementation **and** tests. | Shabbar | Fri | **Shipped.** HMAC-SHA256 interim; no store, no KMS. |
@@ -124,6 +124,13 @@ fake, and a test suite proving (a) no unscoped query is constructable and
 **End of day — the decision checkpoint.** Has the credential-scoping memo
 been approved?
 
+**What actually happened:** no, not by end of Wednesday — the memo was submitted Monday but
+approval didn't land until 2026-09-19, after this checkpoint. The "No" path below is what
+this plan's own logic triggered at the time; recorded as written, not edited to match the
+outcome. **Update, 2026-09-19:** the memo is now approved (`docs/decisions/
+credential-scoping.md`), and adapter work is unblocked as of that date — later than
+scheduled, not skipped.
+
 - **Yes → Thursday and Friday are adapters** (below).
 - **No → adapters drop out of this week, explicitly, in this plan and in
   the handover — not started on a guess.** Thursday and Friday become:
@@ -196,7 +203,7 @@ HMAC-SHA256 interim; no store, no KMS, no console/AXO wiring.
 | Credential-scoping memo | Hiba | `docs/decisions/` (new, not code) | Mon |
 | Capability catalogue | Hiba | `packages/contracts/src/pil_contracts/capabilities.py` (new file) | Tue |
 | Graph access path | Hiba | `packages/graph/` (new) | Wed |
-| Adapter framework, finish | Hiba | `packages/adapters/` (existing) | Thu–Fri, conditional |
+| Adapter framework, finish | Hiba | `packages/adapters/` (existing) | Thu–Fri, unblocked 2026-09-19 |
 | Fixture corpus + test suite | Shabbar | `fixtures/`, `tests/`, `scripts/` | Mon–Wed |
 | Policy gate | Shabbar | `packages/gate/` (new) | Thu |
 | Sealed ledger | Shabbar | `packages/ledger/` (new) | Fri |
@@ -250,9 +257,9 @@ what invalidates and re-triggers them.
   records why PIL is standalone; doesn't resolve the umbrella question.
 - `[NEEDS-DECISION: gateway-ownership]` — unowned above for exactly this
   reason.
-- `[NEEDS-DECISION: credential-scoping]` — Monday's memo is the deliverable
-  that lets a human resolve it. Its approval, by Wednesday, is what this
-  entire week's honesty about "complete" hinges on.
 
-None of the four are Claude Code's to decide, in this session or a future
+`[NEEDS-DECISION: credential-scoping]` is resolved — see `docs/decisions/credential-scoping.md`,
+approved by Hiba, 2026-09-19. Removed from this list.
+
+None of the remaining three are Claude Code's to decide, in this session or a future
 one — per `CLAUDE.md`'s own working style, they get flagged and waited on.
