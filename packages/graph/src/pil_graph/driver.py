@@ -38,6 +38,17 @@ class GraphDriver(ABC):
     to satisfy an interface with no async implementation here would be
     premature. A real driver that needs it gets an async sibling and its own
     ADR, the same as a resolved credential handle would.
+
+    **An implementation MUST apply every statement from**
+    :func:`~pil_graph.schema.all_constraint_statements` **before first use** — this is a
+    correctness requirement, not a setup nicety, stated here for the same reason
+    :meth:`upsert_edge`'s ``LookupError`` contract is: a consumer that only reads
+    :mod:`pil_graph.operations` would have no way to discover it. Without the ``uid``
+    constraint, two ``upsert_node`` calls racing on the same synthetic key can each find
+    no match and each create a node — two nodes sharing one ``uid``, silently, with no
+    error from either write. ``IF NOT EXISTS`` makes the statements idempotent, so an
+    implementation may simply apply them on every startup rather than tracking whether it
+    already has.
     """
 
     @abstractmethod

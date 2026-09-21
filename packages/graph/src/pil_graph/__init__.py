@@ -11,6 +11,7 @@ constraint, rewritten in Python rather than reinvented.
 from pil_graph.driver import GraphDriver
 from pil_graph.fakes import InMemoryGraphDriver
 from pil_graph.operations import CountNodes, UpsertEdge, UpsertNode, uid
+from pil_graph.schema import all_constraint_statements, constraint_statements
 from pil_graph.vocabulary import EDGE_TYPE_COUNT, NODE_LABEL_COUNT, EdgeType, NodeLabel
 
 __all__ = [
@@ -23,5 +24,7 @@ __all__ = [
     "NodeLabel",
     "UpsertEdge",
     "UpsertNode",
+    "all_constraint_statements",
+    "constraint_statements",
     "uid",
 ]
