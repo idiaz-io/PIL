@@ -68,8 +68,10 @@ working code, not a stub.
 and their **defaults** are:
 
 ```python
-lambda_api_url: str = os.getenv("LAMBDA_API_URL", os.getenv("OLLAMA_API_URL", "https://ollama.com/v1"))
-lambda_model: str  = os.getenv("LAMBDA_MODEL",   os.getenv("OLLAMA_MODEL",   "gemma4:31b"))
+lambda_api_url: str = os.getenv(
+    "LAMBDA_API_URL", os.getenv("OLLAMA_API_URL", "https://ollama.com/v1")
+)
+lambda_model: str = os.getenv("LAMBDA_MODEL", os.getenv("OLLAMA_MODEL", "gemma4:31b"))
 ```
 
 `https://ollama.com/v1` is Ollama's own **hosted cloud API**, not a self-hosted local
