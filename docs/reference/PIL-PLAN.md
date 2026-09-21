@@ -10,6 +10,11 @@ the live system.
 the table below says it means — including the two things deliberately not
 part of that claim (cut, and not PIL's to own).
 
+**Update, 2026-09-21:** the last conditional row, adapter framework (Thu–Fri), has shipped
+— see that row and its Thursday/Friday sections below for what actually landed versus what
+this plan originally scoped for those two days. Every other row was already Shipped, Cut, or
+Blocked as of 2026-09-19; nothing here is still "ships this week" in the present tense.
+
 ---
 
 ## Component table
@@ -20,7 +25,7 @@ part of that claim (cut, and not PIL's to own).
 | Credential-scoping memo | Compares AXO/PIL/console's three credential models, what each breaks, a recommendation — for a human to approve. | Hiba | Mon | **Shipped and Approved** — decided by Hiba, 2026-09-19. `docs/decisions/credential-scoping.md`. |
 | Capability catalogue | The ten capabilities, risk levels, product requirements, adapter mapping — as PIL contract data. | Hiba | Tue | **Ships this week** (PIL side only — `merp-console`'s own switch to consuming it is a separate, cross-repo PR, per ADR-0010). |
 | Graph access path | Tenant-scoped query builder + interface over the closed ITKG vocabulary. No live Neo4j driver. | Hiba | Wed | **Ships this week.** |
-| Adapter framework (finish) | Real `ConnectionProvider` + Fleet's connect/fetch/execute, ported from AXO. | Hiba | Thu–Fri | **Unblocked, 2026-09-19.** The credential-scoping memo's approval landed after this plan's original Wednesday checkpoint, not by it — the checkpoint's own "No" path (below) was, honestly, what happened first. Adapter work starts now, not on the original schedule. |
+| Adapter framework (finish) | Real `ConnectionProvider` + Fleet's connect/fetch/execute, ported from AXO. | Hiba | Thu–Fri | **Shipped, 2026-09-21** (PR #6, merge commit into `dev`; small formatting-only follow-up in PR #7). Delivered as `FleetExecutor(endpoint, token)`: `check_connectivity`, `fetch_device_details`, `execute_on_device` (live async path only — AXO's dead sync/409-retry branch not ported, `docs/known-differences.md`), `verify_alert_cleared`, `verify_device_state`. One tool only — the other five translators (`sciencelogic`, `sl1`, `connectwise`, `addigy`, `legacy`) stay translate-only, unextended. See Thursday/Friday sections below for what diverged from this row's original plan. |
 | Fixture corpus + test suite | Real (where reachable) or labeled-synthetic payloads per source, scrubbed, plus the known harness bug fixed. | Shabbar | Mon–Wed | **Ships this week.** |
 | Policy gate | Answers: may this act run — allow / hold / deny. Interface **and** a real implementation **and** tests. | Shabbar | Thu | **Shipped.** Reference implementation; no `safe-auto-heal`, no ledger write. |
 | Sealed ledger | Signed, hash-chained, offline-verifiable evidence. Interface **and** a real implementation **and** tests. | Shabbar | Fri | **Shipped.** HMAC-SHA256 interim; no store, no KMS. |
@@ -158,6 +163,18 @@ that's fully real, not demo-gated) — `connect`, `check_connectivity`,
 
 **If not approved:** hardening day, per Wednesday's fallback.
 
+**What actually happened:** approved, so this path ran — as Phase 3, 2026-09-19 through
+2026-09-21, not on the original Thursday. One expectation in this section didn't survive
+contact with the actual design question: "resolving credentials under whichever model
+Wednesday's approval landed on" assumed PIL would resolve a `CredentialHandle` to a value
+itself. ADR-0015 answered that question differently and permanently — PIL never resolves a
+secret, not this week and not later (same posture as `pil_graph` shipping no live Neo4j
+driver, ADR-0011). So there is no `connect()` method and no new `ConnectionProvider`
+implementation: `FleetExecutor(endpoint, token)` takes an already-resolved token as a plain
+string, and resolving the handle to get there is the caller's job. `check_connectivity` and
+`fetch_device_details` shipped as originally scoped, ported from
+`fleet_healing_adapter.py:158-325` against `httpx.MockTransport` — no live Fleet.
+
 ## Thursday — Shabbar: policy gate
 
 New `packages/gate/` (`pil_gate`). **Interface and a real implementation and
@@ -182,6 +199,26 @@ vendor call (PIL still has no deployable surface; I-1/I-10 hold).
 `PIL-HANDOVER.md` both get the honest note: adapters did not ship this
 week, and why — a stated gap, not a silent slip.
 
+**What actually happened:** shipped 2026-09-21 (PR #6), against `httpx.MockTransport` as
+this section's "fake Fleet-like test double" — I-1/I-10 held throughout, no live vendor
+call anywhere in the diff. One thing surfaced while porting that this section didn't
+anticipate: AXO's own retry-with-backoff around `execute_on_device` is dead code in a way
+distinct from the sync branch already known about — `_run_async` catches the exact three
+exception types its caller's retry loop watches for, so that loop can never fire in AXO
+either. Decided interactively rather than by ADR (restoring evidently-intended behaviour
+isn't an architectural choice) to make the retry actually work in PIL's port; recorded in
+`docs/known-differences.md`'s "Fixed during the port, not preserved" section, since
+`execute_on_device` sits outside the parity harness's scope entirely and fixing it here
+doesn't put "parity verified" at risk anywhere else.
+
+This closes Thursday/Friday's Fleet-specific scope. It does **not** close Phase A/IDI-195
+as a whole — `CLAUDE.md`'s "Current phase" section is still accurate: the parity corpus is
+still empty and the four closing tests still aren't satisfiable without a live AXO
+deployment. CI's `parity` check is red on PR #6 for the pre-existing reason
+(`AXO_READ_TOKEN`/`AXO_PARITY_SHA` unavailable to this run), not because of anything in
+this diff — and couldn't have caught a regression here regardless, since
+`execute_on_device` isn't a translation path the harness compares.
+
 ## Friday — Shabbar: sealed ledger
 
 New `packages/ledger/` (`pil_ledger`). **Interface and a real implementation
@@ -203,7 +240,7 @@ HMAC-SHA256 interim; no store, no KMS, no console/AXO wiring.
 | Credential-scoping memo | Hiba | `docs/decisions/` (new, not code) | Mon |
 | Capability catalogue | Hiba | `packages/contracts/src/pil_contracts/capabilities.py` (new file) | Tue |
 | Graph access path | Hiba | `packages/graph/` (new) | Wed |
-| Adapter framework, finish | Hiba | `packages/adapters/` (existing) | Thu–Fri, unblocked 2026-09-19 |
+| Adapter framework, finish | Hiba | `packages/adapters/` (existing, new `execution/` subpackage) | Thu–Fri, shipped 2026-09-21 (PR #6) |
 | Fixture corpus + test suite | Shabbar | `fixtures/`, `tests/`, `scripts/` | Mon–Wed |
 | Policy gate | Shabbar | `packages/gate/` (new) | Thu |
 | Sealed ledger | Shabbar | `packages/ledger/` (new) | Fri |
