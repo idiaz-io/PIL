@@ -206,9 +206,7 @@ async def test_fetch_device_details_merges_search_and_detail():
             },
         )
 
-    profile = await executor(httpx.MockTransport(handler)).fetch_device_details(
-        "fleet:abc-123"
-    )
+    profile = await executor(httpx.MockTransport(handler)).fetch_device_details("fleet:abc-123")
 
     assert profile.device_id == "fleet:abc-123"
     assert profile.hostname == "web-01"
@@ -237,9 +235,7 @@ async def test_fetch_device_details_stub_when_host_not_found():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"hosts": []})
 
-    profile = await executor(httpx.MockTransport(handler)).fetch_device_details(
-        "fleet:missing"
-    )
+    profile = await executor(httpx.MockTransport(handler)).fetch_device_details("fleet:missing")
 
     assert profile.hostname == "missing"
     assert profile.os_type == "unknown"
@@ -337,9 +333,9 @@ async def test_execute_on_device_host_timeout_from_fleet():
             return httpx.Response(200, json={"execution_id": "exec-1"})
         return httpx.Response(200, json={"host_timeout": True})
 
-    result = await executor_with_clock(
-        httpx.MockTransport(handler), FakeClock()
-    ).execute_on_device("fleet:abc", "echo hi")
+    result = await executor_with_clock(httpx.MockTransport(handler), FakeClock()).execute_on_device(
+        "fleet:abc", "echo hi"
+    )
 
     assert result.success is False
     assert "timed out" in result.stderr.lower()
@@ -351,9 +347,9 @@ async def test_execute_on_device_missing_execution_id_in_response():
             return httpx.Response(200, json={"host": {"id": 5}})
         return httpx.Response(200, json={"unexpected": "shape"})
 
-    result = await executor_with_clock(
-        httpx.MockTransport(handler), FakeClock()
-    ).execute_on_device("fleet:abc", "echo hi")
+    result = await executor_with_clock(httpx.MockTransport(handler), FakeClock()).execute_on_device(
+        "fleet:abc", "echo hi"
+    )
 
     assert result.success is False
     assert "no execution_id" in result.stderr

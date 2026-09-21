@@ -541,9 +541,7 @@ class FleetExecutor:
                 host_id = None
                 if hosts_resp.status_code == 200:
                     for candidate in hosts_resp.json().get("hosts", []):
-                        if str(candidate.get("uuid", "")).upper().startswith(
-                            uuid_prefix.upper()
-                        ):
+                        if str(candidate.get("uuid", "")).upper().startswith(uuid_prefix.upper()):
                             host_id = candidate.get("id")
                             break
 
@@ -602,9 +600,7 @@ class FleetExecutor:
 
             exec_result = await self.execute_on_device(device_id, command)
             actual = exec_result.stdout.strip()
-            passed = (
-                actual == str(expected) if expected is not None else exec_result.exit_code == 0
-            )
+            passed = actual == str(expected) if expected is not None else exec_result.exit_code == 0
             results.append({"name": name, "expected": expected, "actual": actual, "pass": passed})
             if not passed:
                 all_passed = False
