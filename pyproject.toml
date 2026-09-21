@@ -51,6 +51,11 @@ markers = [
 target-version = "py312"
 line-length = 100
 src = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/capabilities/src", "packages/gate/src", "packages/ledger/src", "scripts"]
+# `ruff format` formats fenced ```python blocks inside Markdown by default. docs/ holds
+# narrative example code, not importable modules -- a formatter opinion on a code sample
+# is a config-scope mismatch, not a code-quality signal, and it was failing CI on every
+# PR regardless of what that PR touched. Excluded here rather than reformatted per-file.
+extend-exclude = ["docs/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PT", "SIM", "TID", "RUF"]
