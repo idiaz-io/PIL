@@ -229,6 +229,36 @@ def test_gate_imports_only_capabilities_and_the_stdlib():
 
 
 # ----------------------------------------------------------------------------------
+# graph depends only on pil-contracts (ADR-0011)
+# ----------------------------------------------------------------------------------
+
+
+def test_graph_depends_only_on_contracts():
+    config = tomllib.loads(
+        (REPO_ROOT / "packages" / "graph" / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    names = [dep.split(">=")[0].split("==")[0].strip() for dep in config["project"]["dependencies"]]
+    assert names == ["pil-contracts"]
+
+
+def test_graph_imports_only_contracts_and_the_stdlib():
+    """No graph-client library, ever (ADR-0011). PIL ships the query builder, the closed
+    vocabulary, and the driver interface -- never a live connection. A real driver
+    (Neo4j, Memgraph, AGE, or a dev-only test double) lives behind
+    ``pil_graph.driver.GraphDriver``, outside this package entirely. This is the same
+    whitelist mechanism ``test_contracts_imports_nothing_from_this_repo_or_outside_the_stdlib``
+    and its siblings already use -- a driver import fails here for the same reason any
+    other unlisted import would, not because ``neo4j`` is named on a denylist."""
+    allowed = {"pil_graph", "pil_contracts", "__future__"}
+    stdlib = {"abc", "collections", "dataclasses", "enum", "typing"}
+    offenders: list[str] = []
+    for path in python_files(GRAPH_SRC):
+        for module in imported_roots(path) - allowed - stdlib:
+            offenders.append(f"{path.relative_to(REPO_ROOT)} imports {module!r}")
+    assert not offenders, "\n".join(offenders)
+
+
+# ----------------------------------------------------------------------------------
 # I-1 · PIL is a library
 # ----------------------------------------------------------------------------------
 
