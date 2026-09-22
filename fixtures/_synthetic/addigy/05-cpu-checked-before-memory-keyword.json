@@ -1,0 +1,7 @@
+{
+  "alert_id": "a5",
+  "agentid": "agent-5",
+  "device_name": "server-5",
+  "alert_message": "High cpu and memory usage detected",
+  "severity": "critical"
+}

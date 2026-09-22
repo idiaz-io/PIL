@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "a4",
+    "device_id": "addigy:dev-88",
+    "device_name": "addigy:dev-88",
+    "severity": "P3",
+    "category": "certificate",
+    "message": "SSL certificate expires soon",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "id": "a4",
+      "device_id": "dev-88",
+      "message": "SSL certificate expires soon"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": ""}
+  }
+}

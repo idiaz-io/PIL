@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "a2",
+    "device_id": "addigy:unknown",
+    "device_name": "imac-5",
+    "severity": "P3",
+    "category": "general",
+    "message": "Something unusual",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "id": "a2",
+      "hostname": "imac-5",
+      "message": "Something unusual",
+      "severity": "elevated",
+      "client_id": "cust-9",
+      "client_name": "Zeta Inc"
+    },
+    "tenant_hint": {"tenant_id": "cust-9", "tenant_name": "Zeta Inc"}
+  }
+}

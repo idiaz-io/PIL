@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "a1",
+    "device_id": "addigy:unknown",
+    "device_name": "macbook-3",
+    "severity": "P2",
+    "category": "security",
+    "message": "FileVault disabled",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "alert_id": "a1",
+      "device_name": "macbook-3",
+      "severity": "high",
+      "alert_message": "FileVault disabled",
+      "policy_id": "pol-1",
+      "policy_name": "Security Policy"
+    },
+    "tenant_hint": {"tenant_id": "pol-1", "tenant_name": "Security Policy"}
+  }
+}
