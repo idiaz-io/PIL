@@ -364,28 +364,50 @@ def test_a_blank_tenant_is_rejected_at_configuration_time():
 
 @pytest.mark.skipif(not FIXTURES.exists(), reason="no fixtures captured yet")
 def test_every_fixture_yields_the_configured_tenant():
-    """The same guarantee, over real captured payloads rather than synthetic ones."""
+    """The same guarantee, over real *and* synthetic fixture payloads.
+
+    Real ``fixtures/<source>/`` is empty (production capture is blocked -- the homelab is
+    offline, docs/adr/0007-fixture-capture-and-scrubbing.md), and has no near-term end
+    date. Walking only that tree meant this test found zero registered-source
+    directories, checked nothing, and reported SKIPPED on every run -- visibly, not
+    silently, but zero actual verification all the same, indefinitely. Also walking
+    ``fixtures/_synthetic/<source>/`` (33 hand-derived payloads as of this writing) means
+    this test exercises real assertions today, and keeps covering the real corpus too,
+    the moment payloads land there -- no further change needed either way.
+
+    The final ``assert checked > 0`` is the other half of the fix: a fixture-driven test
+    that can report success (pass *or* skip) having verified nothing is worse than no
+    test, because it reads as coverage that was never actually exercised.
+    """
     config = AdapterConfig(tenant_id="tenant-acme")
     registry = build_registry(config, CLOCK)
 
     checked = 0
-    for source_dir in FIXTURES.iterdir():
-        translator = registry.get(source_dir.name) if source_dir.is_dir() else None
-        if translator is None:
+    for fixtures_root in (FIXTURES, FIXTURES / "_synthetic"):
+        if not fixtures_root.is_dir():
             continue
-        for path in source_dir.rglob("*.json"):
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            try:
-                envelope = translator.translate(payload)
-            except Exception:
-                # Payloads AXO itself cannot process live under _malformed/. A
-                # translator raising on one is faithful behaviour, not a failure.
+        for source_dir in fixtures_root.iterdir():
+            translator = registry.get(source_dir.name) if source_dir.is_dir() else None
+            if translator is None:
                 continue
-            assert envelope.tenant_id == "tenant-acme", f"I-5 violated by {path}"
-            checked += 1
+            for path in source_dir.rglob("*.json"):
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                try:
+                    envelope = translator.translate(payload)
+                except Exception:
+                    # Payloads meant to raise -- AXO's own _malformed/ cases, and several
+                    # synthetic fixtures that assert exactly this. A translator raising is
+                    # faithful behaviour, not a failure, and there is no tenant_id to check
+                    # on an exception.
+                    continue
+                assert envelope.tenant_id == "tenant-acme", f"I-5 violated by {path}"
+                checked += 1
 
-    if checked == 0:
-        pytest.skip("fixtures directory exists but holds no payloads for known sources")
+    assert checked > 0, (
+        "no fixture payload was checked -- fixtures/ and fixtures/_synthetic/ were both "
+        "empty or unreadable. A test that can pass (or skip) having verified nothing is "
+        "worse than no test at all."
+    )
 
 
 # ----------------------------------------------------------------------------------
