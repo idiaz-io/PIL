@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "evt-100",
+    "device_id": "unknown",
+    "device_name": "db01",
+    "severity": "P2",
+    "category": "disk",
+    "message": "Disk usage above threshold",
+    "occurred_at": "2026-01-02T03:04:05.000000Z",
+    "device_history": [],
+    "raw_payload": {
+      "alert_id": "evt-100",
+      "device_name": "db01",
+      "client_id": "cust-42",
+      "client_name": "Acme Corp",
+      "severity": "4",
+      "category": "disk",
+      "description": "Disk usage above threshold",
+      "timestamp": "2026-01-02T03:04:05Z"
+    },
+    "tenant_hint": {"tenant_id": "cust-42", "tenant_name": "Acme Corp"}
+  }
+}

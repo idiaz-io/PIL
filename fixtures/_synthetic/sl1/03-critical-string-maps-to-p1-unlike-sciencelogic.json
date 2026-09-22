@@ -1,0 +1,8 @@
+{
+  "alert_id": "sl1-300",
+  "device_id": "host-3",
+  "message": "Daemon crash detected",
+  "severity": "critical",
+  "client_id": "cust-7",
+  "client_name": "Beta LLC"
+}

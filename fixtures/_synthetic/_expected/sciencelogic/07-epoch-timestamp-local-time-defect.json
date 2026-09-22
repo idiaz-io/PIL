@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "unknown",
+    "device_id": "srv-42",
+    "device_name": "unknown",
+    "severity": "P2",
+    "category": "cpu",
+    "message": "Load average high",
+    "occurred_at": "2026-03-20T09:46:40.000000Z",
+    "device_history": [],
+    "raw_payload": {
+      "device_id": "srv-42",
+      "epoch": 1774000000,
+      "severity": "critical",
+      "category": "cpu",
+      "message": "Load average high"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": "unknown"}
+  }
+}

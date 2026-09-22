@@ -1,0 +1,6 @@
+{
+  "id": 42,
+  "description": "Generic ticket, no summary field",
+  "company": {"id": 7, "name": "Widgets Inc"},
+  "priority": {}
+}

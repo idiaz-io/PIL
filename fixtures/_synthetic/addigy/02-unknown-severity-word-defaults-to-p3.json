@@ -1,0 +1,8 @@
+{
+  "id": "a2",
+  "hostname": "imac-5",
+  "message": "Something unusual",
+  "severity": "elevated",
+  "client_id": "cust-9",
+  "client_name": "Zeta Inc"
+}

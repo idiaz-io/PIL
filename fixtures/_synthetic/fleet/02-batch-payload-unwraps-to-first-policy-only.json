@@ -1,0 +1,6 @@
+{
+  "failing_policies": [
+    {"host_uuid": "11112222333344445555", "host_name": "web-1", "policy_name": "Disk space low", "team_name": "Beta"},
+    {"host_uuid": "99998888777766665555", "host_name": "web-2", "policy_name": "Firewall disabled", "team_name": "Beta"}
+  ]
+}

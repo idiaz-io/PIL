@@ -1,0 +1,10 @@
+{
+  "alert_id": "evt-100",
+  "device_name": "db01",
+  "client_id": "cust-42",
+  "client_name": "Acme Corp",
+  "severity": "4",
+  "category": "disk",
+  "description": "Disk usage above threshold",
+  "timestamp": "2026-01-02T03:04:05Z"
+}

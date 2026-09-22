@@ -1,0 +1,8 @@
+{
+  "id": 77,
+  "summary": "Patch window failed",
+  "company": {"id": 3, "identifier": "GammaCo"},
+  "priority": {"id": 4},
+  "type": {"name": "Scheduled Maintenance Window"},
+  "dateEntered": "2026-02-01T00:00:00Z"
+}

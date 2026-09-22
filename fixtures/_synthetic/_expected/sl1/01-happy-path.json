@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "sl1-100",
+    "device_id": "sl1:host-9",
+    "device_name": "db-primary",
+    "severity": "P2",
+    "category": "service",
+    "message": "Service stopped unexpectedly",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "event_id": "sl1-100",
+      "device_id": "host-9",
+      "device_name": "db-primary",
+      "message": "Service stopped unexpectedly",
+      "severity": "2",
+      "org_id": "org-1",
+      "org_name": "Acme"
+    },
+    "tenant_hint": {"tenant_id": "org-1", "tenant_name": "Acme"}
+  }
+}

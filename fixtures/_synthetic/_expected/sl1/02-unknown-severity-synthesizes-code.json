@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "sl1-200",
+    "device_id": "sl1:host-2",
+    "device_name": "app-2",
+    "severity": "P9",
+    "category": "cpu",
+    "message": "Load average high",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "id": "sl1-200",
+      "entity_id": "host-2",
+      "entity_name": "app-2",
+      "event_message": "Load average high",
+      "severity": "9"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": ""}
+  }
+}

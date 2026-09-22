@@ -1,0 +1,7 @@
+{
+  "id": "sl1-200",
+  "entity_id": "host-2",
+  "entity_name": "app-2",
+  "event_message": "Load average high",
+  "severity": "9"
+}

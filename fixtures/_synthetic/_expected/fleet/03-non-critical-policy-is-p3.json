@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "fleet-policy-Screen lock enabled-AAAA0000",
+    "device_id": "fleet:AAAA000011112222",
+    "device_name": "laptop-9",
+    "severity": "P3",
+    "category": "compliance",
+    "message": "laptop-9 does NOT meet Fleet policy: 'Screen lock enabled' — this condition is currently FALSE on the device and must be remediated",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "host_uuid": "AAAA000011112222",
+      "host_name": "laptop-9",
+      "policy_name": "Screen lock enabled",
+      "team_name": "Gamma"
+    },
+    "tenant_hint": {"tenant_id": "Gamma", "tenant_name": "Gamma"}
+  }
+}

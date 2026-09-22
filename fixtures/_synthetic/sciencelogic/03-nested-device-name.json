@@ -1,0 +1,7 @@
+{
+  "id": "evt-300",
+  "device": {"name": "app-server-7"},
+  "severity": "minor",
+  "category": "network",
+  "message": "Interface down"
+}

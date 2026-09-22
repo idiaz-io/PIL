@@ -1,0 +1,7 @@
+{
+  "id": 88,
+  "summary": "Weird ticket",
+  "company": {"id": 5, "identifier": "DeltaCo"},
+  "priority": {"id": "urgent"},
+  "type": {"name": "Backup job failed"}
+}

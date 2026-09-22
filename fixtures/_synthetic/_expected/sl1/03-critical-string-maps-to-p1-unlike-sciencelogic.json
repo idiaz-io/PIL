@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "sl1-300",
+    "device_id": "sl1:host-3",
+    "device_name": "sl1:host-3",
+    "severity": "P1",
+    "category": "service",
+    "message": "Daemon crash detected",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "alert_id": "sl1-300",
+      "device_id": "host-3",
+      "message": "Daemon crash detected",
+      "severity": "critical",
+      "client_id": "cust-7",
+      "client_name": "Beta LLC"
+    },
+    "tenant_hint": {"tenant_id": "cust-7", "tenant_name": "Beta LLC"}
+  }
+}

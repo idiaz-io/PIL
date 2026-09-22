@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "fleet-policy-Unknown policy-unknown",
+    "device_id": "fleet:unknown",
+    "device_name": "unknown",
+    "severity": "P3",
+    "category": "compliance",
+    "message": "unknown does NOT meet Fleet policy: 'Unknown policy' — this condition is currently FALSE on the device and must be remediated",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "failing_policies": []
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": ""}
+  }
+}

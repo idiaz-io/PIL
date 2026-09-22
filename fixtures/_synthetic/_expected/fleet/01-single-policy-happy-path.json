@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "fleet-policy-FileVault enabled-ABCDEF12",
+    "device_id": "fleet:ABCDEF1234567890",
+    "device_name": "mac-mini-7",
+    "severity": "P2",
+    "category": "security",
+    "message": "mac-mini-7 does NOT meet Fleet policy: 'FileVault enabled' — this condition is currently FALSE on the device and must be remediated",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "host_uuid": "ABCDEF1234567890",
+      "host_name": "mac-mini-7",
+      "policy_name": "FileVault enabled",
+      "team_name": "Acme"
+    },
+    "tenant_hint": {"tenant_id": "Acme", "tenant_name": "Acme"}
+  }
+}

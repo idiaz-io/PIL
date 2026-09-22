@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "12345",
+    "device_id": "555",
+    "device_name": "HQ-Site",
+    "severity": "P1",
+    "category": "service",
+    "message": "SQL Server stopped on PROD-DB-01",
+    "occurred_at": "2025-03-10T14:30:00.000000Z",
+    "device_history": [],
+    "raw_payload": {
+      "id": 12345,
+      "summary": "SQL Server stopped on PROD-DB-01",
+      "company": {"id": 100, "identifier": "AcmeCorp"},
+      "priority": {"id": 1},
+      "type": {"name": "Service"},
+      "dateEntered": "2025-03-10T14:30:00Z",
+      "deviceId": 555,
+      "siteName": "HQ-Site"
+    },
+    "tenant_hint": {"tenant_id": "100", "tenant_name": "AcmeCorp"}
+  }
+}

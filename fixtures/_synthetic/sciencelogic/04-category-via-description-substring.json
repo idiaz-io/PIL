@@ -1,0 +1,7 @@
+{
+  "event_id": "evt-400",
+  "device_name": "fileserver-2",
+  "category": "hardware",
+  "priority": "3",
+  "description": "Filesystem check failed on /data"
+}

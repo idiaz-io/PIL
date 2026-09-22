@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "sl1-500",
+    "device_id": "sl1:unknown",
+    "device_name": "sl1:unknown",
+    "severity": "P3",
+    "category": "general",
+    "message": "",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "id": "sl1-500"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": ""}
+  }
+}

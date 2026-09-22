@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "a5",
+    "device_id": "addigy:agent-5",
+    "device_name": "server-5",
+    "severity": "P1",
+    "category": "cpu",
+    "message": "High cpu and memory usage detected",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "alert_id": "a5",
+      "agentid": "agent-5",
+      "device_name": "server-5",
+      "alert_message": "High cpu and memory usage detected",
+      "severity": "critical"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": ""}
+  }
+}

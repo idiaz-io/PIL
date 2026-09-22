@@ -1,0 +1,7 @@
+{
+  "alert_id": "a3",
+  "agentid": "agent-42",
+  "alert_message": "Patch update available",
+  "severity": "low",
+  "policy_id": "policy-config-group-7"
+}

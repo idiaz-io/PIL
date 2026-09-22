@@ -1,0 +1,11 @@
+{
+  "alert_id": "leg-100",
+  "device_id": "dev-1",
+  "device_name": "gateway-1",
+  "severity": "P1",
+  "category": "network",
+  "description": "Gateway unreachable",
+  "timestamp": "2026-01-05T10:00:00+00:00",
+  "client_id": "cust-1",
+  "client_name": "Acme"
+}

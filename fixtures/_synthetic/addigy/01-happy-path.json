@@ -1,0 +1,8 @@
+{
+  "alert_id": "a1",
+  "device_name": "macbook-3",
+  "severity": "high",
+  "alert_message": "FileVault disabled",
+  "policy_id": "pol-1",
+  "policy_name": "Security Policy"
+}

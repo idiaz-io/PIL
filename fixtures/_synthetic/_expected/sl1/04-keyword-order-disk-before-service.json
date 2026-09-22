@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "sl1-400",
+    "device_id": "sl1:host-4",
+    "device_name": "storage-4",
+    "severity": "P3",
+    "category": "disk",
+    "message": "disk service failed",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "event_id": "sl1-400",
+      "device_id": "host-4",
+      "device_name": "storage-4",
+      "message": "disk service failed"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": ""}
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "evt-500",
+    "device_id": "unknown",
+    "device_name": "misc-box",
+    "severity": "P4",
+    "category": "unknown",
+    "message": "Something odd happened",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "xid": "evt-500",
+      "device_name": "misc-box",
+      "severity": "notice",
+      "category": "widget",
+      "description": "Something odd happened"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": "unknown"}
+  }
+}
