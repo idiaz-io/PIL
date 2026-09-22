@@ -1,0 +1,9 @@
+{
+  "event_id": "sl1-100",
+  "device_id": "host-9",
+  "device_name": "db-primary",
+  "message": "Service stopped unexpectedly",
+  "severity": "2",
+  "org_id": "org-1",
+  "org_name": "Acme"
+}

@@ -1,0 +1,6 @@
+{
+  "event_id": "sl1-400",
+  "device_id": "host-4",
+  "device_name": "storage-4",
+  "message": "disk service failed"
+}
