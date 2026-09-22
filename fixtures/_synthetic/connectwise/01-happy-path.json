@@ -1,0 +1,10 @@
+{
+  "id": 12345,
+  "summary": "SQL Server stopped on PROD-DB-01",
+  "company": {"id": 100, "identifier": "AcmeCorp"},
+  "priority": {"id": 1},
+  "type": {"name": "Service"},
+  "dateEntered": "2025-03-10T14:30:00Z",
+  "deviceId": 555,
+  "siteName": "HQ-Site"
+}

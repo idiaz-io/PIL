@@ -1,0 +1,7 @@
+{
+  "id": 999,
+  "summary": "Ticket with no company",
+  "company": null,
+  "priority": {"id": 2},
+  "type": {"name": "Infrastructure"}
+}

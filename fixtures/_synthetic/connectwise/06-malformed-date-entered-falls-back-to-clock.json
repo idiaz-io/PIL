@@ -1,0 +1,8 @@
+{
+  "id": 5,
+  "summary": "Timestamp is garbage",
+  "company": {"id": 1, "identifier": "EpsilonCo"},
+  "priority": {"id": 1},
+  "type": {"name": "Service"},
+  "dateEntered": "not-a-real-date"
+}
