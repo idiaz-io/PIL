@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from pil_graph.operations import CountNodes, UpsertEdge, UpsertNode
+from pil_graph.schema import all_constraint_statements
 from pil_graph.vocabulary import EdgeType, NodeLabel
 
 #: Same banned-construct list AXO's test uses. "NODE KEY" and existence
@@ -54,3 +55,12 @@ def test_count_nodes_cypher_is_portable() -> None:
     cypher, _ = CountNodes(tenant_id="t", label=NodeLabel.ASSET).to_cypher()
     for bad in BANNED:
         assert bad not in cypher, f"CountNodes Cypher contains {bad!r}"
+
+
+def test_schema_statements_are_portable() -> None:
+    """The constraint/index DDL is community-safe too (ADR-0007) — a single-property
+    uniqueness constraint and a property index, neither Enterprise-only, no NODE KEY or
+    existence constraint."""
+    for statement in all_constraint_statements():
+        for bad in BANNED:
+            assert bad not in statement, f"schema statement contains {bad!r}: {statement}"

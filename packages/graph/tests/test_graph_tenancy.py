@@ -9,10 +9,13 @@ what makes "PIL owns the ITKG interface" a checkable claim, not an
 architectural intention.
 
 AXO's own version of the behavioural half runs in CI (`itkg-leak`) against a
-real Neo4j. This package ships no live driver, so the same proof runs here
-against :class:`~pil_graph.fakes.InMemoryGraphDriver` — the closest
-equivalent available without a deployment, same honesty `PIL-PLAN.md`'s
-Testing section already states about what "proven correct" can mean here.
+real Neo4j. This package ships no live driver, so the behavioural proof here
+runs against :class:`~pil_graph.fakes.InMemoryGraphDriver` instead — cheap,
+no external dependency, runs in every CI job. It is not, by itself, proof a
+real driver behaves the same way; ``tests/test_graph_neo4j_integration.py``
+is that proof, against a real Neo4j, gated on a local instance being up
+(``make neo4j-up``) since CI has none. Both exist on purpose: this file for
+routine coverage, that one for the claim the fake alone cannot make.
 """
 
 from __future__ import annotations

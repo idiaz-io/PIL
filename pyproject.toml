@@ -29,6 +29,13 @@ dev = [
     "ruff>=0.9.0",
     "mypy>=1.14",
 ]
+# Opt-in only -- `uv sync` (what CI and everyone else runs) never installs this. The
+# neo4j driver belongs to nobody's shipped package (ADR-0011: pil_graph ships no live
+# driver, so no package's pyproject.toml may depend on one) -- it exists solely for
+# tests/_graph_neo4j_driver.py, a dev-only GraphDriver implementation that lives outside
+# every package for the same reason. `uv sync --group graph-integration` or
+# `make neo4j-test` pull it in; plain `uv sync`/`uv run pytest` do not.
+graph-integration = ["neo4j>=5.24,<6"]
 
 # ----------------------------------------------------------------------------------
 # Test runner
