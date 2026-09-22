@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "leg-100",
+    "device_id": "dev-1",
+    "device_name": "gateway-1",
+    "severity": "P1",
+    "category": "network",
+    "message": "Gateway unreachable",
+    "occurred_at": "2026-01-05T10:00:00.000000Z",
+    "device_history": [],
+    "raw_payload": {
+      "alert_id": "leg-100",
+      "device_id": "dev-1",
+      "device_name": "gateway-1",
+      "severity": "P1",
+      "category": "network",
+      "description": "Gateway unreachable",
+      "timestamp": "2026-01-05T10:00:00+00:00",
+      "client_id": "cust-1",
+      "client_name": "Acme"
+    },
+    "tenant_hint": {"tenant_id": "cust-1", "tenant_name": "Acme"}
+  }
+}
