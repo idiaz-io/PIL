@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "fleet-policy-Disk space low-11112222",
+    "device_id": "fleet:11112222333344445555",
+    "device_name": "web-1",
+    "severity": "P2",
+    "category": "disk",
+    "message": "web-1 does NOT meet Fleet policy: 'Disk space low' — this condition is currently FALSE on the device and must be remediated",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "host_uuid": "11112222333344445555",
+      "host_name": "web-1",
+      "policy_name": "Disk space low",
+      "team_name": "Beta"
+    },
+    "tenant_hint": {"tenant_id": "Beta", "tenant_name": "Beta"}
+  }
+}

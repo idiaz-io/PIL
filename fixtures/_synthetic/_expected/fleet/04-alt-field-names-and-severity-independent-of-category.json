@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "fleet-policy-CrowdStrike agent running-CAFEBABE",
+    "device_id": "fleet:CAFEBABE11223344",
+    "device_name": "srv-77",
+    "severity": "P3",
+    "category": "security",
+    "message": "srv-77 does NOT meet Fleet policy: 'CrowdStrike agent running' — this condition is currently FALSE on the device and must be remediated",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "uuid": "CAFEBABE11223344",
+      "hostname": "srv-77",
+      "policy": "CrowdStrike agent running"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": ""}
+  }
+}
