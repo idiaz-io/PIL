@@ -45,8 +45,8 @@ sixth (the bus) is cut, not merely unstarted — see §1's table.
 - **Write the ADR before the code**, for anything with architectural consequences: a new HTTP
   surface, a new node/edge/action-class/kind, an ambiguous tenant, PIL importing a product, or
   AXO's current behaviour being ambiguous enough that you're tempted to just pick. Short is
-  fine — decision, alternatives, reason, a paragraph each. Nine exist in `docs/adr/`; read the
-  relevant one before assuming a question is still open.
+  fine — decision, alternatives, reason, a paragraph each. Fifteen exist in `docs/adr/`; read
+  the relevant one before assuming a question is still open.
 
 ---
 
@@ -64,10 +64,10 @@ PIL specifically (§4).
 | # | Component | State, verified | Where |
 |---|---|---|---|
 | 1 | **Shared shapes** | **Real.** Envelope, versioning, canonical serialisation, redaction, tenancy resolution. Zero dependencies, Python stdlib only. | `packages/contracts` |
-| 2 | **Adapter framework** | **Partial, translate-only.** Six translators ported and tested (`sciencelogic`, `sl1`, `connectwise`, `fleet`, `addigy`, `legacy`). `connect`, `execute_on_device`, `check_connectivity`, `fetch_device_details`, `verify_*` are explicitly deferred (ADR-0005) — nothing in this repo opens a socket. | `packages/adapters` |
+| 2 | **Adapter framework** | **Partial — real for one tool, translate-only for the other five.** Six translators ported and tested (`sciencelogic`, `sl1`, `connectwise`, `fleet`, `addigy`, `legacy`). Fleet additionally has a real execution surface — `pil_adapters.execution.fleet.FleetExecutor`: `check_connectivity`, `fetch_device_details`, `execute_on_device`, `verify_alert_cleared`, `verify_device_state` — which **does** open sockets, via `httpx`. ADR-0015 draws the line I-1 actually protects: PIL becoming a reachable network *service* is forbidden; PIL making outbound calls as a client, on a caller's behalf, is not the same thing. `FleetExecutor(endpoint, token)` takes an already-resolved token, never a `CredentialHandle` — PIL still never resolves a secret, permanently, not just for now. The other five tools have no execute/connect module at all; `connect`/`execute_on_device`/`check_connectivity`/`fetch_device_details`/`verify_*` stay deferred for them (ADR-0005). | `packages/adapters`, ADR-0015 |
 | 3 | **Policy gate** | **Real (reference implementation; no `safe-auto-heal`, no ledger write).** Interface + `ReferenceGate` + `StaticGate` test double. Decisions are `allow` / `hold` / `deny` with the console's four tiers; `decide()` is pure. | `packages/gate`, ADR-0013 |
 | 4 | **Sealed ledger** | **Real (HMAC-SHA256 interim; no store, no KMS).** Interface + `HmacSealer` + `MemoryLedger` + `StaticLedger`. `seal()` is pure; the product persists. | `packages/ledger`, ADR-0014 |
-| 5 | **Graph access path** | **Partial.** Closed vocabulary (10 nodes, 13 edges, ported from AXO's `vocab.go`), a tenant-scoped query builder (`UpsertNode`/`UpsertEdge`/`CountNodes`), and a `GraphDriver` interface. No live Neo4j driver ships from PIL — a consumer supplies one — per ADR-0011's scoping and ADR-17 (sovereign/air-gap) staying open. | `packages/graph`, ADR-0011 |
+| 5 | **Graph access path** | **Partial.** Closed vocabulary (10 nodes, 13 edges, ported from AXO's `vocab.go`), a tenant-scoped query builder (`UpsertNode`/`UpsertEdge`/`CountNodes`), the uid/tenant_id constraint DDL (`pil_graph.schema`, ported from `itkg.go`'s `ApplyConstraints` — text only, no execution), and a `GraphDriver` interface. No live Neo4j driver ships from PIL — a consumer supplies one — per ADR-0011's scoping and ADR-17 (sovereign/air-gap) staying open. The query builder and schema have been proven against a real `neo4j:5` locally (`tests/test_graph_neo4j_integration.py`, dev-only, gated on a running instance — not CI, which has none), including the one thing the in-memory fake can't prove by itself: `upsert_edge`'s `LookupError`-on-zero-rows contract against real Cypher, and the `uid` constraint actually rejecting a duplicate at the database level, not just by convention. | `packages/graph`, ADR-0011 |
 | 6 | **Bus + orchestrator** | **Cut, not merely unstarted — a real distinction.** IDI-195 D4 killed the bus deliberately: zero consumers, AXO already has its own queue. Four docs that presented the bus as settled architecture were rewritten so none of them do. What replaces it for Phase A is `pil_adapters.Sink` — one method, `emit(envelope)`, three implementations (`NullSink`, `CollectingSink`, `RedactingSink`) — an in-process handoff a translator's caller uses, that a translator itself never imports. **The capability catalogue, cut in the same ADR, was narrowly revived by ADR-0012** once it gained real consumers (`merp-console`'s tables, and now `pil_gate` itself); the bus decision is untouched. | `packages/adapters/src/pil_adapters/sink.py`, ADR-0009; `packages/capabilities`, ADR-0012 |
 
 **"Cut" vs. "absent" is a real distinction, worth keeping straight.** Gate and ledger now
@@ -89,7 +89,7 @@ right and this one needs patching.
 
 | # | Rule | Enforced by |
 |---|---|---|
-| I-1 | PIL is a library. No HTTP surface, no long-running process. | `tests/test_invariants.py` bans `fastapi`/`flask`/`django`/`starlette`/`uvicorn`/`socket`/`socketserver` anywhere in either package — an import walk, not a grep, so a function-local or dynamic import is still caught. |
+| I-1 | PIL is a library. No HTTP surface, no long-running process. | `tests/test_invariants.py` bans `fastapi`/`flask`/`django`/`starlette`/`uvicorn`/`socket`/`socketserver` anywhere in either package — an import walk, not a grep, so a function-local or dynamic import is still caught. Extended, not weakened, by ADR-0015's outbound-client exception (`httpx` in `pil_adapters`): a second test checks the structural property directly — no `.bind(`/`.listen(`/`.accept(` anywhere in PIL — rather than trusting the import list alone to keep drawing the line correctly forever. |
 | I-2 | One consumer means not shared — it belongs to the product, not PIL. | Judgement only. No mechanism; a review question every time. |
 | I-3 | PIL never depends on a product. | ruff `flake8-tidy-imports.banned-api` (static) + an AST-walking test (dynamic/function-local imports too) — the two lists are asserted equal to each other so they can't drift apart. |
 | I-4 | Products never call each other. | Follows from I-1 and I-3: PIL offers no transport, so it cannot provide one. No direct mechanism. |
@@ -118,26 +118,38 @@ for review, not something a test can answer.
 | `docs/phase-a-scope.md` | The original Phase A brief: move the adapter framework out of AXO, translate-only, nothing else. Section 7's ten questions were answered by reading AXO — those answers are ADR-0005 and `docs/reconciliation.md`, not restated here. | **High** for scope; **superseded** for anything the reconciliation later corrected (two corrections are recorded there explicitly). |
 | `docs/reconciliation.md` (IDI-195) | The most rigorous document in the repo. Audits six decisions (D1–D6) against the code as it stood, then records exactly what changed to close each. Preserves the original "before" audit unedited specifically so it stays evidence. Read the **Outcome** table first, the audit below it only for the reasoning. | **Highest** for what actually happened and why — every claim is a file, line and command someone else can run, and most are marked `[ran]`. |
 | `docs/known-differences.md` | The one intentional AXO/PIL difference (tenant resolution, ADR-0004) and six preserved defects (tenant read from payload in eleven sites total, non-deterministic timestamps) that PIL reproduces on purpose because I-10 forbids fixing them mid-migration. | **High** — each is a file and line. Ticket numbers are still `_to file_` as of the last read; don't assume they've been filed without checking. |
-| `docs/adr/0001`–`0010` | One decision each, all `Accepted`. 0001 naming, 0002 version rule, 0003 envelope (amended by 0009), 0004 tenant resolution, 0005 translate-only scope, 0006 versioning split, 0007 fixture capture, 0008 connection config (amends 0005), 0009 sink (amends 0003, closes D4), 0010 repo topology (records why PIL is standalone; does not resolve `merp-console`'s own ADR-05). | **Highest** for the decisions they cover — read the amending ADR, not just the one it amends, or you'll act on a superseded decision. |
-| `fixtures/README.md` + `fixtures/` | The parity corpus. **Empty.** Capture requires `PIL_CAPTURE_ENABLED` + `PIL_CAPTURE_SALT` in AXO plus real production traffic — none of which is this repo's to provide. `make parity` fails honestly on an empty corpus rather than passing vacuously. | Accurate description of a real gap, not a stale doc — confirmed live (`ls fixtures/` is empty). |
+| `docs/adr/0001`–`0015` | One decision each, all `Accepted`. 0001 naming, 0002 version rule, 0003 envelope (amended by 0009), 0004 tenant resolution, 0005 translate-only scope, 0006 versioning split, 0007 fixture capture, 0008 connection config (amends 0005), 0009 sink (amends 0003, closes D4), 0010 repo topology (records why PIL is standalone; does not resolve `merp-console`'s own ADR-05), 0011 graph language + itkg-ownership (PIL stays Python; unblocks `packages/graph`), 0012 capability catalogue revival (amends 0009, narrowly — real consumers now exist), 0013 policy gate (`pil_gate`; what it deliberately doesn't do), 0014 sealed ledger (`pil_ledger`; what it deliberately doesn't store), 0015 execution layer scope (outbound HTTP as a client isn't I-1's surface; PIL never resolves a secret, permanently — extends 0005's deferral for Fleet only, amends nothing). | **Highest** for the decisions they cover — read the amending ADR, not just the one it amends, or you'll act on a superseded decision. |
+| `fixtures/README.md` + `fixtures/` | The real parity corpus (`fixtures/<source>/`, `fixtures/_expected/<source>/`) is still **empty**. Capture requires `PIL_CAPTURE_ENABLED` + `PIL_CAPTURE_SALT` in AXO plus real production traffic — none of which is this repo's to provide. `make parity` fails honestly on an empty corpus rather than passing vacuously. `fixtures/_synthetic/` is new and different: 33 hand-authored fixtures proving the six translators do what their source says, since real capture is blocked with no near-term end date. Structurally excluded from the corpus above (leading underscore) and never counted toward DoD 7 — see `fixtures/_synthetic/README.md` for the distinction and the rule that keeps it honest (an expected file is derived by hand, before ever running PIL — never recorded from PIL's own output). | Accurate — confirmed live: real corpus empty, `make parity` exits 1 on zero fixtures, `_synthetic/` holds 33 fixtures across all six sources. |
 | `.github/workflows/ci.yml` | Three jobs: `check` (lint+typecheck+test), `fresh-clone` (DoD 8 — README alone), `parity` (requires `AXO_READ_TOKEN` + a pinned `AXO_PARITY_SHA`, **fails** rather than skipping if either is missing). | Matches what's described in `reconciliation.md` — the "green when skipped" false pass pil-inventory.md found has been fixed; confirm this hasn't regressed before citing it. |
 
 ---
 
 ## 4. Where the architecture disagrees with what's actually here
 
-Three conflicts nobody has resolved, named plainly rather than smoothed over:
+Two genuine conflicts nobody has resolved, plus one that's now decided but not yet built,
+named plainly rather than smoothed over:
 
-1. **Credential scoping — three incompatible models, across three repos.** AXO resolves
-   every credential from a global `platform_settings` table with **no `tenant_id` column at
-   all** — one Fleet token for the whole deployment, confirmed across seven integrations by
-   reading the resolution code directly (`axo-inventory.md`). PIL's `ConnectionProvider` is
-   keyed **`(tool, tenant_id, product)`** specifically to prevent one product inheriting
-   another's access — QUILL must never hold AXO's write credential for the same tool
-   (ADR-0008). `merp-console`'s own schema is keyed **tenant only**, no product dimension.
-   All three disagree, and PIL's is the only one of the three actually designed to prevent the
-   failure mode the others allow. **This needs a human decision, not code** — it's cheap to
-   leave open only because no tenant today holds more than one product's real credentials.
+1. **Credential scoping — three incompatible models, across three repos. Decided
+   2026-09-19; the decision is not yet built.** AXO resolves every credential from a global
+   `platform_settings` table with **no `tenant_id` column at all** — one Fleet token for the
+   whole deployment, confirmed across seven integrations by reading the resolution code
+   directly (`axo-inventory.md`). PIL's `ConnectionProvider` is keyed **`(tool, tenant_id,
+   product)`** — D3's maximal case, a distinct credential per granted product. `merp-console`'s
+   own schema is keyed **tenant only**, no product dimension. `docs/decisions/
+   credential-scoping.md` (approved by Hiba) resolves this without a rewrite anywhere: **keep
+   PIL's interface exactly as it is** — it costs nothing, being an interface plus a
+   file-backed test double, not a live store yet; **the real store, when built, defaults to
+   one secret per `(tool, tenant_id)`**, with product-scoping expressed through capability
+   grants at the gate rather than the credential layer, matching `merp-console`'s live model;
+   AXO's eventual migration target is that same tenant-scoped store. The cost, stated
+   plainly in the memo rather than softened: in the default mode, `connection_for(tool,
+   tenant, "axo")` and `connection_for(tool, tenant, "quill")` return the *identical*
+   handle — **`packages/gate` is the sole enforcement point** for product isolation under
+   this default, not a defense-in-depth backstop to a credential-layer one. The stronger,
+   per-product isolation D3 originally wanted is still available, explicitly, the moment a
+   tenant needs it — just not the default. **The decision is made. The real store still
+   doesn't exist** — it gets built when a second product actually needs a tool connection,
+   ADR-0008's original trigger, unchanged.
 2. **The gateway.** The architecture diagram requires one — "one door for surfaces,"
    authentication/authorization/tenancy/rate-limiting/audit all enforced there. PIL's own
    invariant (I-1) says such a thing cannot live in PIL. Nobody has written down where it does
@@ -268,11 +280,19 @@ actually landed since. In short: the adapter framework exists in PIL, six transl
 ported and tested, the credential-provider interface exists (D2/D3, ADR-0008), the bus is cut
 and replaced with a sink (D4, ADR-0009), and AXO's own three-position wiring switch
 (`legacy`/`shadow`/`pil`) is real and covers both the webhook and scheduled-poller paths. What
-remains, tracked separately (IDI-196): the parity corpus (`fixtures/` is empty — needs
-production capture), and the four closing tests (parity passing in CI, shadow-mode zero
+remains, tracked separately (IDI-196): the real parity corpus (`fixtures/<source>/` is empty
+— needs production capture; `fixtures/_synthetic/` is a different, later thing — see §3), and
+the four closing tests (parity passing in CI, shadow-mode zero
 differences, a break-it test, a live rollback demonstration) — all four need a running AXO
 deployment this repo does not have.
 
 Do not treat "Phase A" as closed. IDI-195's own definition of done lists two items
 (parity passing in CI, all four closing tests run) as **not yet satisfiable** from this repo
 alone.
+
+**Since this section was written, Phase 3 has shipped**: Fleet's execution surface
+(ADR-0015), the graph query builder and schema proven against a real Neo4j, and the
+33-fixture synthetic corpus above. None of it changes the two not-yet-satisfiable items —
+they still need a running AXO deployment this repo does not have. See `PIL-PLAN.md` for
+what actually shipped and when; that file, not this section, is where sequencing is kept
+current.
