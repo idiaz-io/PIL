@@ -131,6 +131,28 @@ def test_every_known_source_is_subject_to_the_coverage_floor():
     }
 
 
+def test_demo_cases_reads_the_synthetic_corpus():
+    """--demo replays fixtures/_synthetic/, not a hardcoded dict (mechanism 2).
+
+    No AXO checkout needed -- this only proves the wiring collects the right files, not
+    that AXO agrees with them. That proof needs a live checkout; see make parity-demo.
+    """
+    cases = parity.demo_cases()
+
+    sources = {c.source for c in cases}
+    assert sources == {"sciencelogic", "sl1", "connectwise", "fleet", "addigy", "legacy"}, (
+        "a source directory went missing, or one was added to fixtures/_synthetic/ "
+        "without a matching translator"
+    )
+    assert len(cases) == 33, (
+        "fixtures/_synthetic/'s fixture count changed -- update this if the change was "
+        "deliberate, or find out why it wasn't"
+    )
+    # Reuses collect_fixtures()'s own origin format -- a real path, not a synthetic label,
+    # so a failure in --demo points at the exact file to open.
+    assert all(c.origin.startswith("_synthetic/") for c in cases)
+
+
 @NEEDS_AXO
 def test_an_out_of_scope_source_is_skipped_and_reported(tmp_path, capsys):
     """A source with no PIL translator must not be scored as a match.
