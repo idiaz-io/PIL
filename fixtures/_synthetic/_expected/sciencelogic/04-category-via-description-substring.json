@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "projection": {
+    "alert_id": "evt-400",
+    "device_id": "unknown",
+    "device_name": "fileserver-2",
+    "severity": "P3",
+    "category": "disk",
+    "message": "Filesystem check failed on /data",
+    "occurred_at": "2026-03-14T15:09:26.535897Z",
+    "device_history": [],
+    "raw_payload": {
+      "event_id": "evt-400",
+      "device_name": "fileserver-2",
+      "category": "hardware",
+      "priority": "3",
+      "description": "Filesystem check failed on /data"
+    },
+    "tenant_hint": {"tenant_id": "unknown", "tenant_name": "unknown"}
+  }
+}

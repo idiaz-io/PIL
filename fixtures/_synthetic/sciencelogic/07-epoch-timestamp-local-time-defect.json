@@ -1,0 +1,7 @@
+{
+  "device_id": "srv-42",
+  "epoch": 1774000000,
+  "severity": "critical",
+  "category": "cpu",
+  "message": "Load average high"
+}

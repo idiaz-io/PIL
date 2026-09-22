@@ -1,0 +1,7 @@
+{
+  "alert_id": "evt-800",
+  "device_name": "web02",
+  "severity": "2",
+  "category": "service",
+  "message": "Process crashed"
+}

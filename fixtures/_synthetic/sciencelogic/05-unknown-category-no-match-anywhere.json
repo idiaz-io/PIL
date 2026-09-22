@@ -1,0 +1,7 @@
+{
+  "xid": "evt-500",
+  "device_name": "misc-box",
+  "severity": "notice",
+  "category": "widget",
+  "description": "Something odd happened"
+}
