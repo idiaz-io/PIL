@@ -1,4 +1,4 @@
-.PHONY: help install test lint typecheck check parity record-golden neo4j-up neo4j-down neo4j-test clean
+.PHONY: help install test lint typecheck check parity parity-demo record-golden neo4j-up neo4j-down neo4j-test clean
 
 help:
 	@echo "install       Create the virtualenv and install both packages"
@@ -7,6 +7,7 @@ help:
 	@echo "typecheck     mypy"
 	@echo "check         lint + typecheck + test  (what CI runs)"
 	@echo "parity        Compare PIL's translators against AXO's, over every fixture"
+	@echo "parity-demo   Replay fixtures/_synthetic/ against AXO live -- not a parity result"
 	@echo "record-golden Save AXO's current output as the specification (review the diff)"
 	@echo "neo4j-up      Start a throwaway local Neo4j (docker-compose.neo4j.yml)"
 	@echo "neo4j-down    Stop it and discard its data"
@@ -33,6 +34,13 @@ AXO_PATH ?= ../axo
 
 parity:
 	uv run python scripts/parity.py --axo-path $(AXO_PATH)
+
+# Validates fixtures/_synthetic/'s hand-derived expectations against AXO's real, current
+# behaviour. Needs a local AXO checkout (same as `parity`), no token, no CI -- local dev
+# only, same posture as `neo4j-test`. Never a parity result; the harness itself refuses to
+# print one for --demo.
+parity-demo:
+	uv run python scripts/parity.py --axo-path $(AXO_PATH) --demo
 
 # Defines the specification (§D6 step 2). Review the diff before committing: a change to
 # a file that already existed means AXO's behaviour moved, which is a finding.

@@ -8,7 +8,11 @@ Byte-identical or it fails (§5 Step 3), with one documented exception.
 any source whose corpus is thinner than ``--min-per-source``. Both used to pass. A harness
 that returns success having compared nothing reports Definition of Done item 7 as satisfied
 while holding no evidence, and that is worse than having no harness — it gets read as proof.
-``--demo`` exists for exercising the machinery and never reports a parity result.
+``--demo`` replays ``fixtures/_synthetic/`` (hand-authored, not captured -- see
+``fixtures/_synthetic/README.md``) against AXO live. It exercises the machinery and
+validates those fixtures' hand-derived expectations against AXO's real, current
+behaviour, but never reports a parity result — ADR-0007 already rejected hand-authored
+payloads as DoD 7 evidence, and this doesn't reopen that.
 
 **What this proves, precisely.** Every field except ``tenant_id`` must match byte for
 byte. ``tenant_id`` is excluded because PIL takes the tenant from the adapter instance's
@@ -90,51 +94,12 @@ OUT_OF_SCOPE_SOURCES: dict[str, str] = {
     ),
 }
 
-#: Payloads used by --demo to prove the harness itself works before real fixtures exist.
-DEMO_PAYLOADS: dict[str, list[dict[str, Any]]] = {
-    "sciencelogic": [
-        {
-            "xid": "42",
-            "yname": "db01",
-            "severity": "4",
-            "category": "service",
-            "message": "SQL Server stopped",
-            "organization_id": "99",
-        },
-        {"id": "7", "severity": "emergency", "description": "disk full", "epoch": 1770000000},
-        {"alert_id": "", "event_id": "e-9", "device": {"name": "web01"}},
-    ],
-    "connectwise": [
-        {
-            "id": 12345,
-            "summary": "SQL Server stopped on PROD-DB-01",
-            "company": {"id": 100, "identifier": "AcmeCorp"},
-            "priority": {"id": 1},
-            "type": {"name": "Service"},
-            "dateEntered": "2025-03-10T14:30:00Z",
-        },
-    ],
-    "fleet": [
-        {
-            "host_uuid": "aaaabbbbccccdddd",
-            "host_name": "mac-01",
-            "policy_name": "FileVault enabled",
-            "team_name": "Acme",
-        },
-        {"failing_policies": [{"host_uuid": "eeeeffff11112222", "policy_name": "Disk space"}]},
-    ],
-    "sl1": [{"event_id": "1", "severity": "2", "message": "IIS application pool stopped"}],
-    "addigy": [
-        {
-            "id": "a1",
-            "severity": "high",
-            "alert_message": "FileVault disabled",
-            "policy_id": "pol-1",
-            "agentid": "agent-9",
-        }
-    ],
-    "legacy": [{"id": "x", "platform": "custom", "severity": "P1", "message": "something"}],
-}
+#: Where --demo reads its payloads from. Hand-authored, not captured -- ADR-0007 already
+#: rejected hand-authored payloads as parity evidence, which is exactly why this stays
+#: behind --demo rather than the default path. See fixtures/_synthetic/README.md for how
+#: each expected file was derived (by hand, from the translator's source, before ever
+#: running PIL) and why that's the property that keeps this corpus meaningful.
+SYNTHETIC_ROOT = REPO_ROOT / "fixtures" / "_synthetic"
 
 
 @dataclass
@@ -265,11 +230,12 @@ def _display(path: Path) -> str:
 
 
 def demo_cases() -> list[Case]:
-    return [
-        Case(source, payload, f"--demo[{source}][{index}]")
-        for source, payloads in DEMO_PAYLOADS.items()
-        for index, payload in enumerate(payloads)
-    ]
+    """Every payload under fixtures/_synthetic/ -- reuses collect_fixtures() pointed at a
+    different root, so the same leading-underscore skip that already excludes
+    fixtures/_expected/ from the real corpus excludes fixtures/_synthetic/_expected/ here,
+    with no special-casing needed."""
+    cases, _skipped = collect_fixtures(SYNTHETIC_ROOT)
+    return cases
 
 
 def run_axo(axo_path: Path, cases: list[Case], python: Path) -> list[dict[str, Any]]:
@@ -375,8 +341,9 @@ def main() -> int:
     parser.add_argument(
         "--demo",
         action="store_true",
-        help="run against built-in synthetic payloads to prove the harness works. "
-        "This is NOT a parity proof — it exercises the machinery, not real traffic.",
+        help="replay fixtures/_synthetic/ (hand-authored, not captured) against AXO live. "
+        "This is NOT a parity proof — it exercises the machinery and validates those "
+        "fixtures' hand-derived expectations against AXO's real behaviour, not real traffic.",
     )
     parser.add_argument("--python", default="", help="AXO's interpreter (default: its .venv)")
     parser.add_argument(
@@ -440,7 +407,10 @@ def main() -> int:
         print(f"  golden         {golden_root}")
     print(f"  cases          {len(cases)}")
     if args.demo:
-        print("  MODE           --demo: synthetic payloads. Proves the harness, not parity.")
+        print(
+            "  MODE           --demo: fixtures/_synthetic/, hand-derived, not captured. "
+            "Validates against AXO live -- proves those expectations, not parity."
+        )
     # Printed, never silent. A harness that drops part of its corpus without saying so
     # reads as having covered everything.
     for source, count in sorted(skipped.items()):
@@ -561,11 +531,11 @@ def main() -> int:
         return 1
 
     if args.demo:
-        print(f"Harness OK — {len(outcomes)} synthetic payloads agree.")
+        print(f"Harness OK — {len(outcomes)} fixtures/_synthetic/ payloads agree with AXO.")
         print()
-        print("This is NOT a parity result and must not be recorded as one. It proves the")
-        print("machinery runs against payloads written by hand. Real parity needs the")
-        print("captured corpus; run without --demo.")
+        print("This is NOT a parity result and must not be recorded as one. It validates")
+        print("hand-derived expectations against AXO's real, current behaviour -- not")
+        print("production traffic. Real parity needs the captured corpus; run without --demo.")
         return 0
 
     print(f"PASSED — {len(outcomes)} payloads, byte-identical except {excluded}.")
