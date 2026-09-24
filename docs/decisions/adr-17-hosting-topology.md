@@ -1,10 +1,9 @@
 # ADR-17 options memo — sovereign/air-gap hosting: a decided direction, not examined against what's shipped
 
-**Status: Awaiting decision.** Written by Claude Code (session work, 2026-09-23), at Hiba's
-request, after reading PIL, `merp-console`, and AXO directly rather than reasoning from
-first principles. This is not an ADR — it's the memo that has to exist before ADR-17 can be
-written at all, the same role `docs/decisions/credential-scoping.md` played before ADR-0008
-was reconciled.
+**Status: Awaiting decision.** Written by Hiba, 2026-09-23, after reading PIL, `merp-console`,
+and AXO directly rather than reasoning from first principles. This is not an ADR — it's the
+memo that has to exist before ADR-17 can be written at all, the same role
+`docs/decisions/credential-scoping.md` played before ADR-0008 was reconciled.
 
 ## The question, reframed
 
@@ -131,7 +130,7 @@ already answers the question.
 | AXO `msp-platform` — Vault | Parameterize `VAULT_ADDR`/`VAULT_TOKEN` per deployment instead of reading process env at import; needs the same kind of interface PIL's own `ConnectionProvider` already models, applied to secret-store location itself | Not started |
 | AXO `msp-platform` — hosting | Render exit, or a documented, deliberate decision to keep Render for the commercial profile only and build a separate self-hosted deploy path for the sovereign one | Not started |
 | AXO — local LLM | An actual local-inference provider does not exist in any repo today. This is not a swap; it's new work — model hosting, GPU/CPU capacity planning, a real interface behind which Anthropic/hosted-Ollama and a local model are interchangeable | Not started, and not even scoped |
-| `merp-console` — Supabase | The largest lift of the five: migrating the console's entire data layer (Postgres + Auth + Edge Functions) off a hosted platform, or building and maintaining a parallel self-hosted-Postgres-plus-auth path for a sovereign tier | Not started, not scoped, no owner named anywhere |
+| `merp-console` — Supabase | The largest lift of the five: migrating the console's entire data layer (Postgres + Auth + Edge Functions) off a hosted platform, or building and maintaining a parallel self-hosted-Postgres-plus-auth path for a sovereign tier | Not started; no migration path documented anywhere |
 
 **The CUI/ITAR LLM gap is worth stating on its own, because it is not solved by picking
 either path.** No code in any of the three repos today has a local-inference provider that
