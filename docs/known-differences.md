@@ -81,3 +81,35 @@ touching a translator would.
 
 Found while porting, not before — worth noting because it means AXO's retry has likely
 never actually fired in production either, on either side of this migration.
+
+---
+
+## AXO-internal ambiguity, surfaced by this migration
+
+Not a PIL/AXO difference — PIL isn't party to this one. AXO's own two entry points
+disagree with *each other* about what the source string `"sciencelogic"` means, on
+AXO's `dev` branch (the only branch where the shadow/pil switch exists). This predates
+PIL and would be exactly as true if PIL didn't exist; it surfaced now because
+`pil_shim.normalise(source, ...)` takes a single string key, and that key is the thing
+both call sites disagree about.
+
+| Entry point | What `"sciencelogic"` dispatches to |
+|---|---|
+| `backend/routes/webhook.py:83-85` | `normalise_sciencelogic_alert(payload)` — the webhook-shaped ScienceLogic normaliser, matching PIL's `sciencelogic` translator |
+| `backend/services/orchestrator_v2.py:59-61` (`get_adapter`, the scheduled/poller path) | `SL1Adapter(demo_mode=True).normalize_alert(payload)` — a different adapter entirely, matching PIL's separate `sl1` translator, not `sciencelogic` |
+
+Both call sites pass the *same* string, `"sciencelogic"`, into `pil_shim.normalise()`. On
+the webhook path that string correctly pairs with PIL's `sciencelogic` translator. On the
+scheduled path, the same string means AXO calls `SL1Adapter`, not the ScienceLogic
+normaliser — so if the switch were ever set to `shadow` or `pil` on that path, PIL's
+`sciencelogic` translator would be compared against (or substituted for) the wrong AXO
+adapter's output. This is not a translation bug on either side; it is AXO's two entry
+points not agreeing on what their own shared vocabulary means.
+
+Previously visible only as a citation inside `pil_adapters/translators/sl1_healing.py`'s
+module docstring ("`orchestrator_v2.py:61`... demo_mode=True unconditionally"), which
+explained the *adapter's* demo-gating but didn't name the dispatch collision itself.
+Recorded here because it's a real question about AXO's own wiring that someone has to
+answer — do the two paths mean to name the same vendor differently, or is one of them
+wrong? — before any real cutover, not something either repo's migration work can resolve
+unilaterally.
