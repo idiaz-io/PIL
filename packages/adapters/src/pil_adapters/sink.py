@@ -25,6 +25,13 @@ behaviour improvement into a migration — the thing I-10 forbids.
 the migration nothing wraps anything and output stays byte-identical to AXO's; once the
 cutover is done, wrapping the real sink is a one-line change at the call site rather than an
 edit to any translator.
+
+**The third implementation, exactly as predicted.** :class:`GraphSink` is what this
+docstring meant by "nobody knows yet what the second implementation is" -- it wasn't a
+guess that a third would show up, it's the reason this is an interface at all. It hands
+each envelope to :func:`pil_graph_writer.project` and runs whatever operations come back
+against a supplied :class:`~pil_graph.driver.GraphDriver`. No translator changed to get
+here; the graph never existed for `translate()` to know about.
 """
 
 from __future__ import annotations
@@ -34,8 +41,10 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from pil_contracts import Classification, Envelope
+from pil_graph import GraphDriver, UpsertEdge, UpsertNode
+from pil_graph_writer import project
 
-__all__ = ["CollectingSink", "NullSink", "RedactingSink", "Sink"]
+__all__ = ["CollectingSink", "GraphSink", "NullSink", "RedactingSink", "Sink"]
 
 
 class Sink(ABC):
@@ -144,3 +153,30 @@ class RedactingSink(Sink):
     @property
     def stripped_any_credentials(self) -> bool:
         return bool(self.secrets_seen)
+
+
+@dataclass(slots=True)
+class GraphSink(Sink):
+    """Projects each envelope onto ITKG graph operations and runs them.
+
+    All the mapping decisions -- which nodes, which properties, which edges, the
+    source-scoped identity that keeps two different vendors' alerts from colliding onto
+    one node -- live in :mod:`pil_graph_writer`, not here. This class is deliberately
+    thin: call :func:`~pil_graph_writer.project`, run whatever it returns against
+    ``driver``, in order.
+
+    Composes with :class:`RedactingSink` the same way any other sink does --
+    ``GraphSink(driver)`` wrapped in ``RedactingSink`` redacts the envelope before it's
+    projected, though note :func:`~pil_graph_writer.project` never reads ``raw_payload``
+    in the first place, so redaction here guards against a future property mapping
+    reaching for it, not a present one.
+    """
+
+    driver: GraphDriver
+
+    def emit(self, envelope: Envelope) -> None:
+        for operation in project(envelope):
+            if isinstance(operation, UpsertNode):
+                self.driver.upsert_node(operation)
+            elif isinstance(operation, UpsertEdge):
+                self.driver.upsert_edge(operation)

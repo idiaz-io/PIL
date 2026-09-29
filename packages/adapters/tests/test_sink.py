@@ -20,12 +20,14 @@ from pil_adapters import (
     AdapterConfig,
     CollectingSink,
     FrozenClock,
+    GraphSink,
     NullSink,
     RedactingSink,
     Sink,
     get_translator,
 )
 from pil_contracts import REDACTED, AlertBody, Envelope
+from pil_graph import InMemoryGraphDriver, NodeLabel
 
 CLOCK = FrozenClock(datetime(2026, 3, 14, 15, 9, 26, 535897, tzinfo=UTC))
 
@@ -191,3 +193,65 @@ def test_translation_is_unredacted_until_a_sink_redacts_it():
     inner = CollectingSink()
     RedactingSink(inner).emit(result)
     assert inner.envelopes[0].raw_payload["password"] == REDACTED
+
+
+# ----------------------------------------------------------------------------------
+# GraphSink -- the third implementation, wired to a real translation (not just project())
+# ----------------------------------------------------------------------------------
+
+
+def test_graph_sink_is_a_sink():
+    assert isinstance(GraphSink(InMemoryGraphDriver()), Sink)
+
+
+def test_graph_sink_writes_a_real_translation():
+    driver = InMemoryGraphDriver()
+    translator = get_translator("fleet", AdapterConfig(tenant_id="tenant-acme"), CLOCK)
+    result = translator.translate(
+        {
+            "host_uuid": "abc123",
+            "host_name": "db01",
+            "policy_name": "FileVault enabled",
+            "team_name": "Acme",
+        }
+    )
+
+    GraphSink(driver).emit(result)
+
+    assert driver.node_labels_seen("tenant-acme") == {
+        NodeLabel.TENANT,
+        NodeLabel.ASSET,
+        NodeLabel.FINDING,
+    }
+    assert len(driver.edges_for_tenant("tenant-acme")) == 3
+
+
+def test_graph_sink_skips_the_finding_when_alert_id_is_unresolvable():
+    """End to end through the Sink, not just pil_graph_writer.project() directly --
+    proves the missing-alert_id refusal survives the whole translate() -> emit() path,
+    not only the unit-level construction."""
+    driver = InMemoryGraphDriver()
+    translator = get_translator("connectwise", AdapterConfig(tenant_id="tenant-acme"), CLOCK)
+    result = translator.translate({"summary": "no id field at all"})
+
+    GraphSink(driver).emit(result)
+
+    assert driver.node_labels_seen("tenant-acme") == {NodeLabel.TENANT, NodeLabel.ASSET}
+
+
+def test_graph_sink_composes_with_redacting_sink():
+    """Same composition every other sink gets -- RedactingSink wraps, doesn't replace."""
+    driver = InMemoryGraphDriver()
+    sink = RedactingSink(GraphSink(driver))
+
+    translator = get_translator("sciencelogic", AdapterConfig(tenant_id="tenant-acme"), CLOCK)
+    result = translator.translate({"id": "1", "message": "disk full", "password": "hunter2"})
+    sink.emit(result)
+
+    # alert_id ("1") is real; device_id falls back to "unknown" -- Asset is still
+    # written (accepted imprecision), and since alert_id resolved, so is Finding.
+    assert driver.node_labels_seen("tenant-acme") == {
+        NodeLabel.TENANT,
+        NodeLabel.ASSET,
+        NodeLabel.FINDING,
+    }
