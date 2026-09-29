@@ -1,8 +1,18 @@
 """project() -- construction only, checked against the operations it returns, never
-against a live driver (that proof belongs to pil_graph's own Neo4j integration tests)."""
+against a live driver.
+
+That gap is real, not just tidy scoping: a manual run against a real Neo4j (2026-09-29)
+caught a bug these tests didn't -- external_ids was a native Python dict, which is not a
+legal Neo4j property value (a node/relationship property must be a primitive or an array
+of primitives). Fixed by JSON-encoding it; test_external_ids_is_a_json_string below pins
+the fix. Nothing here replaces an actual driver run -- see
+tests/test_graph_neo4j_integration.py for that proof, and ask before assuming a
+property's Python shape is also a legal stored shape.
+"""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -133,9 +143,20 @@ def test_tenant_hint_recorded_as_evidence_not_identity():
     ops = project(envelope(tenant_hint=TenantHint(tenant_id="cust-42", tenant_name="Acme")))
     tenant = next(n for n in nodes(ops) if n.label == NodeLabel.TENANT)
     assert tenant.props["name"] == "Acme"
-    assert tenant.props["external_ids"] == {"hint_tenant_id": "cust-42"}
+    assert json.loads(tenant.props["external_ids"]) == {"hint_tenant_id": "cust-42"}
     # The graph identity is still the configured tenant, never the hint (I-5).
     assert tenant.id == "tenant-acme"
+
+
+def test_external_ids_is_a_json_string_not_a_native_map():
+    """Neo4j property values must be primitives or arrays of primitives -- a nested map
+    is not legal and fails at write time (Neo.ClientError.Statement.TypeError), a real
+    driver caught this, InMemoryGraphDriver's own tests never could."""
+    ops = project(envelope())
+    for node in nodes(ops):
+        if "external_ids" in node.props:
+            assert isinstance(node.props["external_ids"], str)
+            json.loads(node.props["external_ids"])  # must round-trip
 
 
 def test_no_tenant_hint_leaves_name_blank_not_invented():

@@ -26,9 +26,19 @@ fabricating data no translator actually produced. ``Finding.status`` is the one 
 field set here, to the literal value ``"open"`` — the honest, accurate description of a
 freshly-arrived, unactioned alert, not a guess. Everything past that (triage, remediation,
 verification) is a later WRITEBACK-stage concern this module has no information about.
+
+**``external_ids`` is a JSON-encoded string, not a native map.** §6.1 describes it
+conceptually as "a map of source-system keys" — Neo4j's own property-value rules don't
+allow that literally: a node or relationship property must be a primitive or an array of
+primitives, never a nested map. `InMemoryGraphDriver`'s tests never caught this (it just
+stores whatever Python object it's handed); a real Neo4j run did, immediately, with
+``Neo.ClientError.Statement.TypeError``. Encoding as JSON keeps the key-value structure
+round-trippable (``json.loads`` gets the map back) while being a valid scalar to store.
 """
 
 from __future__ import annotations
+
+import json
 
 from pil_contracts import Envelope, format_timestamp
 from pil_graph import EdgeType, NodeLabel, UpsertEdge, UpsertNode
@@ -47,7 +57,8 @@ def project(envelope: Envelope) -> list[UpsertNode | UpsertEdge]:
     if envelope.tenant_hint.tenant_id:
         # Evidence, not identity (I-5) -- what the payload claimed, kept as a property on
         # the node itself rather than trusted for anything.
-        tenant_props["external_ids"] = {"hint_tenant_id": envelope.tenant_hint.tenant_id}
+        hint = {"hint_tenant_id": envelope.tenant_hint.tenant_id}
+        tenant_props["external_ids"] = json.dumps(hint)
 
     asset_id = node_id_for(source, body.device_id)
     asset_props = {
@@ -55,7 +66,7 @@ def project(envelope: Envelope) -> list[UpsertNode | UpsertEdge]:
         "source": source,
         "adapter_version_seen": envelope.adapter_version,
         "last_seen_at": format_timestamp(envelope.observed_at),
-        "external_ids": {f"{source}_device_id": body.device_id},
+        "external_ids": json.dumps({f"{source}_device_id": body.device_id}),
     }
 
     ops: list[UpsertNode | UpsertEdge] = [
@@ -81,7 +92,7 @@ def project(envelope: Envelope) -> list[UpsertNode | UpsertEdge]:
         "message": body.message,
         "status": "open",
         "compound": False,
-        "external_ids": {f"{source}_alert_id": body.alert_id},
+        "external_ids": json.dumps({f"{source}_alert_id": body.alert_id}),
     }
     ops.append(
         UpsertNode(tenant_id=tenant_id, label=NodeLabel.FINDING, id=finding_id, props=finding_props)
