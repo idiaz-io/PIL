@@ -19,7 +19,7 @@ from pil_adapters.connection import (
     ToolConnection,
 )
 from pil_adapters.registry import TRANSLATOR_TYPES, build_registry, get_translator
-from pil_adapters.sink import CollectingSink, NullSink, RedactingSink, Sink
+from pil_adapters.sink import CollectingSink, GraphSink, NullSink, RedactingSink, Sink
 from pil_adapters.translators.addigy import AddigyTranslator
 from pil_adapters.translators.connectwise import ConnectWiseTranslator
 from pil_adapters.translators.fleet import FleetTranslator
@@ -42,6 +42,7 @@ __all__ = [
     "FileConnectionProvider",
     "FleetTranslator",
     "FrozenClock",
+    "GraphSink",
     "LegacyTranslator",
     "NullSink",
     "RedactingSink",

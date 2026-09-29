@@ -13,6 +13,7 @@ members = [
     "pil-contracts",
     "pil-gate",
     "pil-graph",
+    "pil-graph-writer",
     "pil-ledger",
     "pil-workspace",
 ]
@@ -360,6 +361,8 @@ dependencies = [
     { name = "httpx" },
     { name = "pil-capabilities" },
     { name = "pil-contracts" },
+    { name = "pil-graph" },
+    { name = "pil-graph-writer" },
 ]
 
 [package.metadata]
@@ -367,6 +370,8 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "pil-capabilities", editable = "packages/capabilities" },
     { name = "pil-contracts", editable = "packages/contracts" },
+    { name = "pil-graph", editable = "packages/graph" },
+    { name = "pil-graph-writer", editable = "packages/graph_writer" },
 ]
 
 [[package]]
@@ -402,6 +407,21 @@ dependencies = [
 requires-dist = [{ name = "pil-contracts", editable = "packages/contracts" }]
 
 [[package]]
+name = "pil-graph-writer"
+version = "0.1.0"
+source = { editable = "packages/graph_writer" }
+dependencies = [
+    { name = "pil-contracts" },
+    { name = "pil-graph" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pil-contracts", editable = "packages/contracts" },
+    { name = "pil-graph", editable = "packages/graph" },
+]
+
+[[package]]
 name = "pil-ledger"
 version = "0.1.0"
 source = { editable = "packages/ledger" }
@@ -419,6 +439,7 @@ dev = [
     { name = "pil-contracts" },
     { name = "pil-gate" },
     { name = "pil-graph" },
+    { name = "pil-graph-writer" },
     { name = "pil-ledger" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -438,6 +459,7 @@ dev = [
     { name = "pil-contracts", editable = "packages/contracts" },
     { name = "pil-gate", editable = "packages/gate" },
     { name = "pil-graph", editable = "packages/graph" },
+    { name = "pil-graph-writer", editable = "packages/graph_writer" },
     { name = "pil-ledger", editable = "packages/ledger" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },

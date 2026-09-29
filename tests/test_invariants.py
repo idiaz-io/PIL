@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS_SRC = REPO_ROOT / "packages" / "contracts" / "src"
 ADAPTERS_SRC = REPO_ROOT / "packages" / "adapters" / "src"
 GRAPH_SRC = REPO_ROOT / "packages" / "graph" / "src"
+GRAPH_WRITER_SRC = REPO_ROOT / "packages" / "graph_writer" / "src"
 CAPABILITIES_SRC = REPO_ROOT / "packages" / "capabilities" / "src"
 GATE_SRC = REPO_ROOT / "packages" / "gate" / "src"
 LEDGER_SRC = REPO_ROOT / "packages" / "ledger" / "src"
@@ -67,6 +68,7 @@ def test_no_pil_module_imports_a_product():
         CONTRACTS_SRC,
         ADAPTERS_SRC,
         GRAPH_SRC,
+        GRAPH_WRITER_SRC,
         CAPABILITIES_SRC,
         GATE_SRC,
         LEDGER_SRC,
@@ -126,14 +128,16 @@ def test_contracts_imports_nothing_from_this_repo_or_outside_the_stdlib():
     assert not offenders, "\n".join(offenders)
 
 
-def test_adapters_depends_only_on_contracts_capabilities_and_httpx():
-    """httpx joined the list in Phase 3 (ADR-0015) -- pil_adapters.execution makes real
-    outbound calls. Pinned here so a future addition is a reviewed change, not a drift."""
+def test_adapters_declares_its_five_dependencies_deliberately():
+    """httpx joined in Phase 3 (ADR-0015) -- pil_adapters.execution makes real outbound
+    calls. pil-graph and pil-graph-writer joined for pil_adapters.sink.GraphSink -- the
+    third Sink implementation, never a change to any translator. Pinned here so a future
+    addition is a reviewed change, not a drift."""
     config = tomllib.loads(
         (REPO_ROOT / "packages" / "adapters" / "pyproject.toml").read_text(encoding="utf-8")
     )
     names = [dep.split(">=")[0].split("==")[0].strip() for dep in config["project"]["dependencies"]]
-    assert names == ["pil-contracts", "pil-capabilities", "httpx"]
+    assert names == ["pil-contracts", "pil-capabilities", "httpx", "pil-graph", "pil-graph-writer"]
 
 
 # ----------------------------------------------------------------------------------
@@ -259,6 +263,32 @@ def test_graph_imports_only_contracts_and_the_stdlib():
 
 
 # ----------------------------------------------------------------------------------
+# graph_writer depends only on contracts and graph
+# ----------------------------------------------------------------------------------
+
+
+def test_graph_writer_depends_only_on_contracts_and_graph():
+    config = tomllib.loads(
+        (REPO_ROOT / "packages" / "graph_writer" / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    names = [dep.split(">=")[0].split("==")[0].strip() for dep in config["project"]["dependencies"]]
+    assert names == ["pil-contracts", "pil-graph"]
+
+
+def test_graph_writer_imports_only_contracts_graph_and_the_stdlib():
+    """Nothing here may know about a vendor, a translator, or pil_adapters -- its job
+    starts at the Envelope boundary, after translation. Wiring it into the translation
+    path is pil_adapters.sink.GraphSink's job, not this package's."""
+    allowed = {"pil_graph_writer", "pil_graph", "pil_contracts", "__future__"}
+    stdlib: set[str] = set()
+    offenders: list[str] = []
+    for path in python_files(GRAPH_WRITER_SRC):
+        for module in imported_roots(path) - allowed - stdlib:
+            offenders.append(f"{path.relative_to(REPO_ROOT)} imports {module!r}")
+    assert not offenders, "\n".join(offenders)
+
+
+# ----------------------------------------------------------------------------------
 # I-1 · PIL is a library
 # ----------------------------------------------------------------------------------
 
@@ -271,6 +301,7 @@ def test_nothing_in_pil_imports_a_web_framework_or_a_socket():
         CONTRACTS_SRC,
         ADAPTERS_SRC,
         GRAPH_SRC,
+        GRAPH_WRITER_SRC,
         CAPABILITIES_SRC,
         GATE_SRC,
         LEDGER_SRC,
@@ -300,6 +331,7 @@ def test_nothing_in_pil_binds_listens_or_accepts_a_connection():
         CONTRACTS_SRC,
         ADAPTERS_SRC,
         GRAPH_SRC,
+        GRAPH_WRITER_SRC,
         CAPABILITIES_SRC,
         GATE_SRC,
         LEDGER_SRC,
