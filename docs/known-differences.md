@@ -81,3 +81,96 @@ touching a translator would.
 
 Found while porting, not before — worth noting because it means AXO's retry has likely
 never actually fired in production either, on either side of this migration.
+
+---
+
+## AXO-internal ambiguity, surfaced by this migration
+
+Not a PIL/AXO difference — PIL isn't party to this one. AXO's own two entry points
+disagree with *each other* about what the source string `"sciencelogic"` means, on
+AXO's `dev` branch (the only branch where the shadow/pil switch exists). This predates
+PIL and would be exactly as true if PIL didn't exist; it surfaced now because
+`pil_shim.normalise(source, ...)` takes a single string key, and that key is the thing
+both call sites disagree about.
+
+| Entry point | What `"sciencelogic"` dispatches to |
+|---|---|
+| `backend/routes/webhook.py:83-85` | `normalise_sciencelogic_alert(payload)` — the webhook-shaped ScienceLogic normaliser, matching PIL's `sciencelogic` translator |
+| `backend/services/orchestrator_v2.py:59-61` (`get_adapter`, the scheduled/poller path) | `SL1Adapter(demo_mode=True).normalize_alert(payload)` — a different adapter entirely, matching PIL's separate `sl1` translator, not `sciencelogic` |
+
+Both call sites pass the *same* string, `"sciencelogic"`, into `pil_shim.normalise()`. On
+the webhook path that string correctly pairs with PIL's `sciencelogic` translator. On the
+scheduled path, the same string means AXO calls `SL1Adapter`, not the ScienceLogic
+normaliser — so if the switch were ever set to `shadow` or `pil` on that path, PIL's
+`sciencelogic` translator would be compared against (or substituted for) the wrong AXO
+adapter's output. This is not a translation bug on either side; it is AXO's two entry
+points not agreeing on what their own shared vocabulary means.
+
+Previously visible only as a citation inside `pil_adapters/translators/sl1_healing.py`'s
+module docstring ("`orchestrator_v2.py:61`... demo_mode=True unconditionally"), which
+explained the *adapter's* demo-gating but didn't name the dispatch collision itself.
+Recorded here because it's a real question about AXO's own wiring that someone has to
+answer — do the two paths mean to name the same vendor differently, or is one of them
+wrong? — before any real cutover, not something either repo's migration work can resolve
+unilaterally.
+
+---
+
+## Shadow mode's blind spot
+
+Found running a local shadow-mode rehearsal (`pil_shim.normalise()` called directly, real
+AXO call sites, all 33 synthetic fixtures — 2026-09, against a worktree of AXO's `dev`).
+Not a bug — `shadow` mode's behaviour here is *consistent* with `legacy` mode's, which is
+exactly why nobody would have written it differently. But it's a real, structural gap in
+what shadow mode's evidence can say, worth knowing before anyone reads a clean
+`shadow_stats()` report as full coverage.
+
+`pil_shim.normalise()`'s shadow branch (`backend/services/pil_shim.py`, `dev` branch —
+this code doesn't exist on `handoff`):
+
+```python
+# -- shadow ---------------------------------------------------------------------
+# Legacy's result is what the system uses. PIL's is compared and thrown away.
+legacy_result = await _call_legacy(legacy)          # <- outside the try/except below
+
+try:
+    envelope = _translate_with_pil(source, payload, tenant_id or "shadow-unconfigured")
+    ...                                              # comparison, _record(), logging
+except Exception as exc:
+    _record(source, "error")
+    ...
+```
+
+`_call_legacy(legacy)` — the call into AXO's own normaliser — runs **unguarded**. When
+AXO's legacy path raises on a payload, `pil_shim.normalise()` propagates that exception to
+its caller immediately, before `_translate_with_pil` is ever invoked. `_record()` is never
+called; no `PIL shadow:` or `PIL shim: handled` log line is ever emitted. The event leaves
+no trace in `shadow_stats()` — not `identical`, not `different`, not even `error`; that
+`error` bucket is only for a failure inside the *comparison*, after both sides ran.
+
+This matches `legacy` mode's own behaviour exactly (same unguarded call, same
+propagation) — the switch doesn't change what happens when AXO's own code raises, which is
+presumably the intended, deliberate design: shadow mode's job is to observe, not to change
+what production does on any input, including the ones that already error today. That
+consistency is exactly what makes the gap easy to miss: **a clean shadow report over real
+traffic — 100% identical, 0 different, 0 error — would look like full coverage while
+silently omitting every payload where AXO's own normaliser raises**, because those payloads
+never reach the counters at all.
+
+Demonstrated directly by three of the 33 synthetic fixtures, each built to make AXO's own
+normaliser raise (and each already confirmed, separately, via the parity harness, to make
+PIL's translator raise too — "both raise" is the correct, matching behaviour; this section
+is not about a disagreement):
+
+| Fixture | AXO's exception (observed via `pil_shim.normalise()`) |
+|---|---|
+| `fixtures/_synthetic/connectwise/02-null-company-raises-attributeerror.json` | `AttributeError: 'NoneType' object has no attribute 'get'` |
+| `fixtures/_synthetic/legacy/03-malformed-timestamp-raises.json` | `ValueError: Invalid isoformat string: 'not-a-date'` |
+| `fixtures/_synthetic/legacy/04-empty-string-timestamp-key-present-also-raises.json` | `ValueError: Invalid isoformat string: ''` |
+
+All three propagated out of `pil_shim.normalise()` itself in the rehearsal — none produced
+a `shadow_stats()` entry, none logged. A cutover decision that leans on "shadow mode ran
+clean for N days" should account for this: clean means *the traffic that didn't already
+error* agreed, not that every payload was compared. Whatever fraction of real traffic hits
+AXO's own raise-on-malformed-input paths is invisible to this evidence, by construction,
+on both `legacy` and `shadow`.
