@@ -12,6 +12,7 @@ members = ["packages/*"]
 pil-contracts = { workspace = true }
 pil-adapters = { workspace = true }
 pil-graph = { workspace = true }
+pil-graph-writer = { workspace = true }
 pil-capabilities = { workspace = true }
 pil-gate = { workspace = true }
 pil-ledger = { workspace = true }
@@ -21,6 +22,7 @@ dev = [
     "pil-contracts",
     "pil-adapters",
     "pil-graph",
+    "pil-graph-writer",
     "pil-capabilities",
     "pil-gate",
     "pil-ledger",
@@ -45,7 +47,7 @@ graph-integration = ["neo4j>=5.24,<6"]
 # here so PIL's tests do not have to.
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["packages/contracts/tests", "packages/adapters/tests", "packages/graph/tests", "packages/capabilities/tests", "packages/gate/tests", "packages/ledger/tests", "tests"]
+testpaths = ["packages/contracts/tests", "packages/adapters/tests", "packages/graph/tests", "packages/graph_writer/tests", "packages/capabilities/tests", "packages/gate/tests", "packages/ledger/tests", "tests"]
 addopts = "-q --strict-markers --import-mode=importlib"
 markers = [
     "parity: compares PIL output against AXO's, requires an AXO checkout",
@@ -57,7 +59,7 @@ markers = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/capabilities/src", "packages/gate/src", "packages/ledger/src", "scripts"]
+src = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/graph_writer/src", "packages/capabilities/src", "packages/gate/src", "packages/ledger/src", "scripts"]
 # `ruff format` formats fenced ```python blocks inside Markdown by default. docs/ holds
 # narrative example code, not importable modules -- a formatter opinion on a code sample
 # is a config-scope mismatch, not a code-quality signal, and it was failing CI on every
@@ -100,7 +102,7 @@ ban-relative-imports = "all"
 "packages/*/tests/*" = ["TID251"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pil_contracts", "pil_adapters", "pil_graph", "pil_capabilities", "pil_gate", "pil_ledger"]
+known-first-party = ["pil_contracts", "pil_adapters", "pil_graph", "pil_graph_writer", "pil_capabilities", "pil_gate", "pil_ledger"]
 
 # ----------------------------------------------------------------------------------
 # Type checking
@@ -109,4 +111,4 @@ known-first-party = ["pil_contracts", "pil_adapters", "pil_graph", "pil_capabili
 python_version = "3.12"
 strict = true
 warn_unreachable = true
-files = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/capabilities/src", "packages/gate/src", "packages/ledger/src"]
+files = ["packages/contracts/src", "packages/adapters/src", "packages/graph/src", "packages/graph_writer/src", "packages/capabilities/src", "packages/gate/src", "packages/ledger/src"]
