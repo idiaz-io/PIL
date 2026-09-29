@@ -278,9 +278,13 @@ def test_graph_writer_depends_only_on_contracts_and_graph():
 def test_graph_writer_imports_only_contracts_graph_and_the_stdlib():
     """Nothing here may know about a vendor, a translator, or pil_adapters -- its job
     starts at the Envelope boundary, after translation. Wiring it into the translation
-    path is pil_adapters.sink.GraphSink's job, not this package's."""
+    path is pil_adapters.sink.GraphSink's job, not this package's.
+
+    ``json`` joined after a real Neo4j run (not the in-memory fake) rejected a nested
+    dict as a node property -- Neo4j only accepts primitives and arrays of primitives.
+    ``external_ids`` is now JSON-encoded before it's stored."""
     allowed = {"pil_graph_writer", "pil_graph", "pil_contracts", "__future__"}
-    stdlib: set[str] = set()
+    stdlib = {"json"}
     offenders: list[str] = []
     for path in python_files(GRAPH_WRITER_SRC):
         for module in imported_roots(path) - allowed - stdlib:
