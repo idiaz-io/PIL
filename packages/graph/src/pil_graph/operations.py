@@ -79,15 +79,28 @@ class UpsertNode:
     """MERGE a node under the caller's tenant.
 
     ``tenant_id`` and ``id`` are set server-authoritatively — the Cypher this
-    produces applies ``props`` first, then overwrites ``tenant_id``/``id``
-    from the operation's own fields, so a props mapping that tries to smuggle
-    a different tenant cannot win. Same posture as ``itkg.go``'s ``UpsertNode``.
+    produces applies ``props``/``create_only_props`` first, then overwrites
+    ``tenant_id``/``id`` from the operation's own fields, so neither mapping can
+    smuggle a different tenant. Same posture as ``itkg.go``'s ``UpsertNode``.
+
+    ``create_only_props`` are applied only the first time this uid is created
+    (Cypher's ``ON CREATE SET``) — for properties describing something stable
+    about the entity, where letting a later alert overwrite them with whatever
+    it happens to claim would be worse than a slightly stale value. A tenant's
+    display name is the motivating case: it shouldn't flip every time a
+    different alert's hint disagrees with the last one.
+
+    ``props`` is what this field always was: applied on every MERGE, created
+    or not — for properties that are genuinely about the most recent
+    observation (a last-seen timestamp, the latest adapter version to touch
+    this node).
     """
 
     tenant_id: str
     label: NodeLabel
     id: str
     props: Mapping[str, Any] = field(default_factory=dict)
+    create_only_props: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         _require(self.tenant_id, "tenant_id")
@@ -97,13 +110,17 @@ class UpsertNode:
     def to_cypher(self) -> tuple[str, dict[str, Any]]:
         """The Cypher a driver runs, and its parameters. openCypher-portable —
         no APOC/GDS/Enterprise-only construct, same constraint ``itkg.go`` holds
-        itself to (ADR-0007)."""
+        itself to (ADR-0007). ``ON CREATE SET`` is standard openCypher, not an
+        Enterprise or APOC extension -- portable to Memgraph/AGE the same way
+        the rest of this module already is."""
         cypher = (
             f"MERGE (n:{self.label.value} {{uid: $uid}}) "
+            "ON CREATE SET n += $create_props "
             "SET n += $props, n.tenant_id = $tenant, n.id = $id"
         )
         params = {
             "uid": uid(self.tenant_id, self.id),
+            "create_props": dict(self.create_only_props),
             "props": dict(self.props),
             "tenant": self.tenant_id,
             "id": self.id,

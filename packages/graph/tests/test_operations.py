@@ -62,6 +62,31 @@ def test_upsert_node_cypher_sets_tenant_and_id_after_props() -> None:
     }  # carried, but overwritten by the Cypher itself
 
 
+def test_upsert_node_cypher_applies_create_only_props_on_create_set() -> None:
+    """create_only_props rides Cypher's ON CREATE SET -- applied once, at creation,
+    never again on a later MERGE that finds the node already there."""
+    op = UpsertNode(
+        tenant_id="tenant-a",
+        label=NodeLabel.TENANT,
+        id="tenant-a",
+        props={"last_seen_at": "2026-01-01"},
+        create_only_props={"name": "Acme", "tenant_id": "attacker"},
+    )
+    cypher, params = op.to_cypher()
+    assert "ON CREATE SET n += $create_props" in cypher
+    # Same server-authoritative guarantee extends to create_only_props: whatever it
+    # claims, the unconditional SET after it still wins, in the same query.
+    assert cypher.index("$create_props") < cypher.index("n.tenant_id = $tenant")
+    assert params["create_props"] == {"name": "Acme", "tenant_id": "attacker"}
+
+
+def test_create_only_props_defaults_to_empty_and_is_backward_compatible() -> None:
+    """Every UpsertNode built before this field existed keeps behaving identically."""
+    op = UpsertNode(tenant_id="tenant-a", label=NodeLabel.ASSET, id="host-1")
+    _, params = op.to_cypher()
+    assert params["create_props"] == {}
+
+
 # ---------------------------------------------------------------------------
 # UpsertEdge
 # ---------------------------------------------------------------------------

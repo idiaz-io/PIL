@@ -152,3 +152,76 @@ def test_edges_are_scoped_per_tenant() -> None:
 
     assert len(driver.edges_for_tenant("tenant-a")) == 1
     assert len(driver.edges_for_tenant("tenant-b")) == 0
+
+
+# ---------------------------------------------------------------------------
+# InMemoryGraphDriver simulates Cypher's own two-part MERGE, not a naive replace.
+# ---------------------------------------------------------------------------
+
+
+def test_create_only_props_survive_a_second_upsert_with_a_different_value() -> None:
+    """The property this driver exists to prove: create_only_props are applied once,
+    at creation, and a later upsert claiming a different value does not win."""
+    driver = InMemoryGraphDriver()
+    driver.upsert_node(
+        UpsertNode(
+            tenant_id="tenant-a",
+            label=NodeLabel.TENANT,
+            id="tenant-a",
+            create_only_props={"name": "first-name"},
+        )
+    )
+    driver.upsert_node(
+        UpsertNode(
+            tenant_id="tenant-a",
+            label=NodeLabel.TENANT,
+            id="tenant-a",
+            create_only_props={"name": "second-name-should-not-win"},
+        )
+    )
+
+    assert driver._nodes["tenant-a/tenant-a"]["name"] == "first-name"
+
+
+def test_always_props_still_update_on_every_upsert() -> None:
+    """The other half of the same property: props (not create_only_props) keep
+    updating on every MERGE, whether the node is new or not."""
+    driver = InMemoryGraphDriver()
+    driver.upsert_node(
+        UpsertNode(tenant_id="tenant-a", label=NodeLabel.ASSET, id="host-1", props={"seq": 1})
+    )
+    driver.upsert_node(
+        UpsertNode(tenant_id="tenant-a", label=NodeLabel.ASSET, id="host-1", props={"seq": 2})
+    )
+
+    assert driver._nodes["tenant-a/host-1"]["seq"] == 2
+
+
+def test_a_second_upsert_does_not_wipe_properties_it_does_not_mention() -> None:
+    """Real Cypher's `SET n += $props` merges onto the existing node -- a property set
+    by an earlier call and not repeated in a later one must survive, the same way a
+    real Neo4j MERGE already behaves. (A naive `merged = dict(operation.props)` on
+    every call -- what this driver did before create_only_props needed it not to --
+    would silently drop it instead.)"""
+    driver = InMemoryGraphDriver()
+    driver.upsert_node(
+        UpsertNode(
+            tenant_id="tenant-a",
+            label=NodeLabel.ASSET,
+            id="host-1",
+            create_only_props={"hostname": "db01"},
+            props={"last_seen_at": "2026-01-01"},
+        )
+    )
+    driver.upsert_node(
+        UpsertNode(
+            tenant_id="tenant-a",
+            label=NodeLabel.ASSET,
+            id="host-1",
+            props={"last_seen_at": "2026-01-02"},
+        )
+    )
+
+    node = driver._nodes["tenant-a/host-1"]
+    assert node["hostname"] == "db01", "create_only_props from the first call must survive"
+    assert node["last_seen_at"] == "2026-01-02", "props must still update every time"

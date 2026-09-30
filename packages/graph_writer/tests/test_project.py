@@ -19,6 +19,7 @@ import pytest
 
 from pil_contracts import AlertBody, Envelope, TenantHint
 from pil_graph import EdgeType, NodeLabel, UpsertEdge, UpsertNode
+from pil_graph.fakes import InMemoryGraphDriver
 from pil_graph_writer import project
 
 WHEN = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
@@ -115,6 +116,18 @@ def test_asset_has_no_fabricated_properties():
     )
     for absent in absent_fields:
         assert absent not in asset.props
+        assert absent not in asset.create_only_props
+
+
+def test_asset_splits_stable_facts_from_freshness_facts():
+    """hostname/source/external_ids describe which device this is and don't change
+    across writes to the same node (asset_id already embeds source) -- write-once.
+    last_seen_at/adapter_version_seen are about the most recent observation --
+    always-set, the same way Tenant.name is write-once but for the opposite reason."""
+    ops = project(envelope())
+    asset = next(n for n in nodes(ops) if n.label == NodeLabel.ASSET)
+    assert set(asset.create_only_props) == {"hostname", "source", "external_ids"}
+    assert set(asset.props) == {"adapter_version_seen", "last_seen_at"}
 
 
 @pytest.mark.parametrize("missing_alert_id", ["unknown"])
@@ -142,8 +155,8 @@ def test_missing_device_id_still_writes_an_asset_imprecision_is_accepted():
 def test_tenant_hint_recorded_as_evidence_not_identity():
     ops = project(envelope(tenant_hint=TenantHint(tenant_id="cust-42", tenant_name="Acme")))
     tenant = next(n for n in nodes(ops) if n.label == NodeLabel.TENANT)
-    assert tenant.props["name"] == "Acme"
-    assert json.loads(tenant.props["external_ids"]) == {"hint_tenant_id": "cust-42"}
+    assert tenant.create_only_props["name"] == "Acme"
+    assert json.loads(tenant.create_only_props["external_ids"]) == {"hint_tenant_id": "cust-42"}
     # The graph identity is still the configured tenant, never the hint (I-5).
     assert tenant.id == "tenant-acme"
 
@@ -154,13 +167,36 @@ def test_external_ids_is_a_json_string_not_a_native_map():
     driver caught this, InMemoryGraphDriver's own tests never could."""
     ops = project(envelope())
     for node in nodes(ops):
-        if "external_ids" in node.props:
-            assert isinstance(node.props["external_ids"], str)
-            json.loads(node.props["external_ids"])  # must round-trip
+        for props in (node.props, node.create_only_props):
+            if "external_ids" in props:
+                assert isinstance(props["external_ids"], str)
+                json.loads(props["external_ids"])  # must round-trip
 
 
 def test_no_tenant_hint_leaves_name_blank_not_invented():
     ops = project(envelope(tenant_hint=TenantHint()))
     tenant = next(n for n in nodes(ops) if n.label == NodeLabel.TENANT)
-    assert tenant.props["name"] == ""
-    assert "external_ids" not in tenant.props
+    assert tenant.create_only_props["name"] == ""
+    assert "external_ids" not in tenant.create_only_props
+
+
+def test_tenant_name_is_write_once_the_first_alerts_name_survives():
+    """Pins the user-reported bug: Tenant.name used to flip with ingestion order,
+    since every alert issued an unconditional SET. Two alerts for the same tenant
+    with different hints -- the first alert's name must survive the second."""
+    driver = InMemoryGraphDriver()
+    first = envelope(tenant_hint=TenantHint(tenant_name="first-name"))
+    second = envelope(tenant_hint=TenantHint(tenant_name="second-name-should-not-win"))
+
+    for op in project(first):
+        if isinstance(op, UpsertNode):
+            driver.upsert_node(op)
+        else:
+            driver.upsert_edge(op)
+    for op in project(second):
+        if isinstance(op, UpsertNode):
+            driver.upsert_node(op)
+        else:
+            driver.upsert_edge(op)
+
+    assert driver._nodes["tenant-acme/tenant-acme"]["name"] == "first-name"

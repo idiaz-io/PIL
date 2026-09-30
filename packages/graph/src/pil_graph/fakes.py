@@ -38,8 +38,17 @@ class InMemoryGraphDriver(GraphDriver):
     _edges: list[UpsertEdge] = field(default_factory=list)
 
     def upsert_node(self, operation: UpsertNode) -> None:
+        # Mirrors Cypher's own two-part MERGE semantics, not just its Python-object
+        # equivalent: real Neo4j's `SET n += $props` merges onto whatever the node
+        # already has (unmentioned keys survive), and `ON CREATE SET n += $create_props`
+        # only ever applies the first time. Starting fresh from `dict(operation.props)`
+        # on every call -- what this method did before -- silently discarded every
+        # earlier property not repeated in the latest call, which a real driver never
+        # does; nothing surfaced it only because no existing test upserted the same key
+        # twice with different partial props before create_only_props needed it to.
         key = uid(operation.tenant_id, operation.id)
-        merged: dict[str, Any] = dict(operation.props)
+        merged: dict[str, Any] = dict(self._nodes.get(key, operation.create_only_props))
+        merged.update(operation.props)
         merged["tenant_id"] = operation.tenant_id
         merged["id"] = operation.id
         merged["label"] = operation.label
