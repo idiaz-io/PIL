@@ -78,9 +78,7 @@ def project(envelope: Envelope) -> list[UpsertNode | UpsertEdge]:
     source = envelope.source
     body = envelope.body
 
-    tenant_create_only_props: dict[str, object] = {
-        "name": envelope.tenant_hint.tenant_name or ""
-    }
+    tenant_create_only_props: dict[str, object] = {"name": envelope.tenant_hint.tenant_name or ""}
     if envelope.tenant_hint.tenant_id:
         # Evidence, not identity (I-5) -- what the payload claimed, kept as a property on
         # the node itself rather than trusted for anything.
